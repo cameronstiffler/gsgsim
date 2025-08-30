@@ -1,0 +1,4 @@
+Run commands
+python3 gsg_sim.py --ai PCU
+python3 gsg_sim.py --ai NARC
+python3 gsg_sim.py --ai BOTH
