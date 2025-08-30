@@ -47,12 +47,30 @@ def deploy_card(p: "Player", hand_idx: int, *, auto: bool = False, g: Optional["
                 console.print("[red]Cannot deploy Dragoon: Krax must be in play.[/red]")
             return
     # Pay deploy cost
-    if not pay_deploy(p, c, auto=auto, allow_cancel=True):
+    result = pay_deploy(p, c, auto=auto, allow_cancel=True)
+    if not result:
+        if result is None:
+            console.print(f"[yellow]Deploy canceled for {c.name}.[/yellow]")
+        else:
+            console.print(f"[red]Deploy failed: wind cost not fully paid for {c.name}.[/red]")
         return
     # Move card from hand to field
+    # Always append, never overwrite field
+    # Debug: print field before deploy
+    import pprint
+    print("[DEBUG] Field before deploy:", [card.name for card in p.field])
     p.hand.pop(hand_idx)
-    p.field.append(c)
+    if g is not None:
+        if p.name == "NARC":
+            g.narc_player.field.append(c)
+        elif p.name == "PCU":
+            g.pcu_player.field.append(c)
+        else:
+            p.field.append(c)
+    else:
+        p.field.append(c)
     c.new_this_turn = True
+    print("[DEBUG] Field after deploy:", [card.name for card in p.field])
     log(f"[deploy] {p.name} deploys {c.name}")
     if not test_mode:
         console.print(f"[green]{p.name} deploys {c.name} to the field.[/green]")
@@ -468,34 +486,34 @@ def distribute_wind(owner: Player, total: int, *, auto: bool = False, allow_canc
             if target.new_this_turn:
                 console.print(f"[yellow]{target.name} is new this turn and cannot pay.[/yellow]")
                 continue
-            if c.wind >= 4:
+            if target.wind >= 4:
                 # REACTIVE MUNITIONS: If Dormex Lurker is destroyed, destroy the goon that destroyed it
-                if (c.name or '').strip().lower() == 'dormex lurker':
+                if (target.name or '').strip().lower() == 'dormex lurker':
                     # Find last attacker (if tracked)
-                    if hasattr(c, 'last_attacker') and c.last_attacker:
-                        attacker = c.last_attacker
+                    if hasattr(target, 'last_attacker') and target.last_attacker:
+                        attacker = target.last_attacker
                         destroy_if_needed(attacker[0], attacker[1])
                         record(f"Dormex Lurker's REACTIVE MUNITIONS destroys {attacker[1].name}!")
                         console.print(f"[red]Dormex Lurker's REACTIVE MUNITIONS destroys {attacker[1].name}![/red]")
-                if c in owner.field:
-                    owner.field.remove(c)
-                if c.is_titan:
-                    console.print(f"[red]{c.name} (Titan) destroyed and burned![/red]")
-                    log(f"[destroy] {owner.name}:{c.name} (burn)")
-                    record(f"{owner.name}'s {c.name} destroyed")
+                if target in owner.field:
+                    owner.field.remove(target)
+                if target.is_titan:
+                    console.print(f"[red]{target.name} (Titan) destroyed and burned![/red]")
+                    log(f"[destroy] {owner.name}:{target.name} (burn)")
+                    record(f"{owner.name}'s {target.name} destroyed")
                 else:
-                    owner.dead_pool.append(c)
-                    console.print(f"[red]{c.name} destroyed → Dead Pool[/red]")
-                    log(f"[destroy] {owner.name}:{c.name} -> Dead Pool")
-                    record(f"{owner.name}'s {c.name} destroyed")
-                if is_squad_leader(c):
+                    owner.dead_pool.append(target)
+                    console.print(f"[red]{target.name} destroyed → Dead Pool[/red]")
+                    log(f"[destroy] {owner.name}:{target.name} -> Dead Pool")
+                    record(f"{owner.name}'s {target.name} destroyed")
+                if is_squad_leader(target):
                     loser = owner.name
                     winner = "PCU" if loser == "NARC" else "NARC"
                     console.print(
-                        f"[bold red]GAME OVER[/bold red] — {loser}'s Squad Leader ({c.name}) was destroyed. "
+                        f"[bold red]GAME OVER[/bold red] — {loser}'s Squad Leader ({target.name}) was destroyed. "
                         f"[bold green]{winner} wins![/bold green]"
                     )
-                    log(f"[gameover] leader destroyed: loser={loser}, card={c.name}, winner={winner}")
+                    log(f"[gameover] leader destroyed: loser={loser}, card={target.name}, winner={winner}")
                     if _GLOG:
                         _GLOG.write("=== game end ===\n")
                         _GLOG.flush()
@@ -505,7 +523,16 @@ def distribute_wind(owner: Player, total: int, *, auto: bool = False, allow_canc
                         _LOG.flush()
                         _LOG.close()
                     raise SystemExit(0)
-            # (Removed unreachable Familiar Assist code)
+                continue  # Don't pay wind to destroyed goon
+            target.wind += 1
+            applied += 1
+            remaining -= 1
+            record(f"{owner.name} pays 1 wind with {target.name} (now {target.wind})")
+            destroy_if_needed(owner, target)
+    # Only return True if all wind was paid
+    if remaining == 0:
+        return True
+    return False
 
     # Enforce dead pool resource checks for ability costs (meat/gear)
     import sys
@@ -631,9 +658,11 @@ def display_field(p: Player, e: Player):
             tags.append("USED")
         icon = " 📷" if _has_image(c) else ""
         prot = " 🛡" if _is_leader_protected(e, c) else ""  # show protection
-        t1.add_row(
+    # Custom wind display
+    wind_display = str(c.wind)
+    t1.add_row(
             f"[{idx}] {_name_with_badges(c)}{icon}{prot}" + (f" {' '.join(tags)}" if tags else ""),
-            str(c.wind),
+            wind_display,
             _ability_cell_multi(c.abilities),
         )
     console.print(t1)
@@ -651,9 +680,10 @@ def display_field(p: Player, e: Player):
             tags.append("USED")
         icon = " 📷" if _has_image(c) else ""
         prot = " 🛡" if _is_leader_protected(p, c) else ""  # show protection
+        wind_display = str(c.wind)
         t2.add_row(
             f"[{idx}] {_name_with_badges(c)}{icon}{prot}" + (f" {' '.join(tags)}" if tags else ""),
-            str(c.wind),
+            wind_display,
             _ability_cell_multi(c.abilities),
         )
     console.print(t2)
@@ -966,6 +996,14 @@ def pay_ability(owner: "Player", ability, card, *, auto: bool = False, allow_can
     record(f"{p.name} deploys {c.name}")
 
 def use_ability(g: GameState, p: Player, c_idx: int, a_idx: int, t_idx: int | None):
+    # Task Mistres BIDE TIME: Mistres gains Resist until beginning of Player's next turn
+    if (c.name or '').strip().lower() in {'task mistres', 'task mistrex'} and a.name.strip().upper() == 'BIDE TIME':
+        c.has_resist = True
+        c._bide_time_turns = 1  # Custom attribute to track duration
+        record(f"{c.name} gains Resist until beginning of next turn (BIDE TIME)")
+        console.print(f"[cyan]{c.name} gains Resist until beginning of next turn![/cyan]")
+        c.used_this_turn = True
+        return
     # Dragoon LOYAL MOUNT: redirect wind damage from Krax to Dragoon
     if (c.name or '').strip().lower() == 'dragoon' and a.name.strip().lower() == 'loyal mount':
         krax = next((card for card in p.field if (card.name or '').strip().lower() == 'krax'), None)
