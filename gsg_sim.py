@@ -1,10 +1,61 @@
-
-from __future__ import annotations
-# Print at startup for debug visibility
-print("SIMULATOR START", flush=True)
-# file: gsg_sim.py
-#
-
+from typing import Optional
+# Restored deploy_card implementation
+def deploy_card(p: "Player", hand_idx: int, *, auto: bool = False, g: Optional["GameState"] = None):
+    import sys
+    test_mode = not sys.stdin.isatty() or "--test" in sys.argv
+    try:
+        c = p.hand[hand_idx]
+    except IndexError:
+        if not test_mode:
+            return console.print("[red]Bad hand index[/red]")
+        return
+    # Enforce dead pool resource checks for all cards with meat/gear deploy cost
+    if g is not None:
+        combined_dead_pool = g.narc_player.dead_pool + g.pcu_player.dead_pool
+        meat_available = sum(1 for card in combined_dead_pool if getattr(card, "is_bio", False))
+        gear_available = sum(1 for card in combined_dead_pool if getattr(card, "is_mech", False))
+        if c.deploy_meat > 0 and meat_available < c.deploy_meat:
+            log(f"[deploy-block] Not enough meat in dead pool for {c.name}")
+            if not test_mode:
+                console.print(f"[red]Cannot deploy {c.name}: requires {c.deploy_meat} meat from dead pool, only {meat_available} available.[/red]")
+            return
+        if c.deploy_gear > 0 and gear_available < c.deploy_gear:
+            log(f"[deploy-block] Not enough gear in dead pool for {c.name}")
+            if not test_mode:
+                console.print(f"[red]Cannot deploy {c.name}: requires {c.deploy_gear} gear from dead pool, only {gear_available} available.[/red]")
+            return
+    # Prevent shackled goons from contributing wind to deploy
+    if hasattr(c, 'shackled') and c.shackled > 0:
+        log(f"[deploy-block] {c.name} is shackled and cannot contribute wind to deploy.")
+        if not test_mode:
+            console.print(f"[red]{c.name} is shackled and cannot contribute wind to deploy this turn.[/red]")
+        return
+    # Nives can only be deployed if Vex is in play
+    if g is not None and (c.name or '').strip().lower() == 'nives':
+        vex_in_play = any((x.name or '').strip().lower() == 'vex' for x in p.field)
+        if not vex_in_play:
+            log("[deploy-block] Nives requires Vex in play")
+            if not test_mode:
+                console.print("[red]Cannot deploy Nives: Vex must be in play.[/red]")
+            return
+    # Dragoon can only be deployed if Krax is in play
+    if g is not None and (c.name or '').strip().lower() == 'dragoon':
+        krax_in_play = any((x.name or '').strip().lower() == 'krax' for x in p.field)
+        if not krax_in_play:
+            log("[deploy-block] Dragoon requires Krax in play")
+            if not test_mode:
+                console.print("[red]Cannot deploy Dragoon: Krax must be in play.[/red]")
+            return
+    # Pay deploy cost
+    if not pay_deploy(p, c, auto=auto, allow_cancel=True):
+        return
+    # Move card from hand to field
+    p.hand.pop(hand_idx)
+    p.field.append(c)
+    c.new_this_turn = True
+    log(f"[deploy] {p.name} deploys {c.name}")
+    if not test_mode:
+        console.print(f"[green]{p.name} deploys {c.name} to the field.[/green]")
 import argparse
 import json
 import os
@@ -41,98 +92,6 @@ TURN_BUFFER: List[str] = []
 LAST_TURN_SUMMARY: Optional[Dict[str, object]] = None
 _GLOG: Optional[TextIO] = None
 GAMELOG_PATH: Optional[str] = None
-
-def log(msg: str) -> None:
-    if _LOG:
-        _LOG.write(msg.rstrip() + "\n")
-        _LOG.flush()
-
-def record(event: str) -> None:
-    """Human-readable event logging: memory + file + debug log."""
-    msg = event.strip()
-    GAME_LOG.append(msg)
-    TURN_BUFFER.append(msg)
-    if _GLOG:
-        _GLOG.write(msg + "\n")
-        _GLOG.flush()
-    log(f"[ev] {msg}")
-
-def _build_cmd_source(argv: Optional[List[str]] = None) -> _CommandSource:
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--moves", help="Comma-separated commands, e.g. d0,u0.0>0,e")
-    parser.add_argument("--moves-file", help="One command per line; '#' for comments.")
-    parser.add_argument("--default-on-interrupt", choices=["e", "skip", "exit", "none"], default="exit")
-    parser.add_argument("--log", help="Path to transcript/debug file (append).")
-    parser.add_argument("--gamelog", help="Path to write the structured game log (txt).")
-    parser.add_argument("--ai", choices=["NARC", "PCU", "BOTH"], help="Enable simple AI for a side.")
-    try:
-        ns, _ = parser.parse_known_args(argv)
-    except SystemExit:
-        ns = type(
-            "NS", (), {"moves": None, "moves_file": None, "default_on_interrupt": "exit", "log": None, "gamelog": None, "ai": None}
-        )()
-
-    # scripted moves
-    q: Deque[str] = deque()
-    if getattr(ns, "moves", None):
-        for t in ns.moves.split(","):
-            if t.strip():
-                q.append(t.strip())
-    if getattr(ns, "moves_file", None):
-        try:
-            with open(ns.moves_file, "r", encoding="utf-8") as fh:
-                for line in fh:
-                    line = line.strip()
-                    if line and not line.startswith("#"):
-                        q.append(line)
-        except FileNotFoundError:
-            print(f"[io] moves file not found: {ns.moves_file}")
-
-    default_map = {"e": "e", "skip": "", "exit": None, "none": "__RETRY__"}
-    return _CommandSource(queue=q, default_on_interrupt=default_map.get(ns.default_on_interrupt, None))
-
-def get_next_command(prompt: str, default: Optional[str] = None) -> str:
-    global _CMD_SOURCE
-    if _CMD_SOURCE is None:
-        _CMD_SOURCE = _build_cmd_source(sys.argv[1:])
-    if _CMD_SOURCE.queue:
-        cmd = _CMD_SOURCE.queue.popleft()
-        log(f"[cmd] {cmd}")
-        return cmd
-    # Defensive: If running in non-interactive mode OR --moves/--test is present, always return 'e'
-    args = ' '.join(sys.argv)
-    if not sys.stdin.isatty() or '--moves' in args or '--test' in args:
-        return 'e'
-    while True:
-        try:
-            raw = Prompt.ask(prompt, default=default or "")
-        except (KeyboardInterrupt, EOFError):
-            choice = _CMD_SOURCE.default_on_interrupt
-            if choice == "__RETRY__":
-                print("\n(ignored; re-prompt)")
-                continue
-            if choice is None:
-                print("\n(exiting)")
-                if _LOG:
-                    _LOG.close()
-                if _GLOG:
-                    _GLOG.write("=== game end (interrupt) ===\n")
-                    _GLOG.flush()
-                    _GLOG.close()
-                raise SystemExit(0)
-            log(f"[cmd] <interrupt->'{choice or ''}'>")
-            return choice or ""
-        raw = (raw or "").strip()
-        if raw.lower() in {"q", "quit", "exit"}:
-            if _LOG:
-                _LOG.close()
-            if _GLOG:
-                _GLOG.write("=== game end (quit) ===\n")
-                _GLOG.flush()
-                _GLOG.close()
-            raise SystemExit(0)
-        log(f"[cmd] {raw}")
-        return raw
 
 # ============================== Models ==============================
 
@@ -176,6 +135,7 @@ class Card:
     has_resist: bool = False  # ✋ badge
     burns_on_destroy: bool = False
     requirements: str = ""
+    shackled: int = 0  # turns remaining shackled
 
 @dataclass
 class Player:
@@ -375,27 +335,6 @@ def conflicts_with_unique(g: GameState, c: Card) -> bool:
             if is_unique(x) and (x.name or "").strip().lower() == key:
                 return True
     return False
-
-def _dedupe_uniques(deck: List[Card], side: str) -> List[Card]:
-    seen = set()
-    out: List[Card] = []
-    dropped = 0
-    for c in deck:
-        if is_unique(c):
-            key = (c.name or "").strip().lower()
-            if key in seen:
-                dropped += 1
-                continue
-            seen.add(key)
-        out.append(c)
-    import sys
-    test_mode = not sys.stdin.isatty() or "--test" in sys.argv
-    if dropped:
-        log(f"[dedupe] {side} dropped {dropped} unique duplicates")
-        if not test_mode:
-            console.print(f"[yellow]{side}: removed {dropped} duplicate unique(s) from deck.[/yellow]")
-    return out
-
 def _pull_named_starter(primary: List[Card], secondary: List[Card], patterns: List[str]) -> tuple[Optional[Card], List[Card], List[Card]]:
     for i, c in enumerate(primary):
         if _name_matches(c.name, patterns):
@@ -438,7 +377,13 @@ def destroy_if_needed(owner: Player, c: Card) -> None:
                     record(f"{owner.name}'s Dragoon destroyed (linked to Krax)")
         if c in owner.field:
             owner.field.remove(c)
-        if c.is_titan:
+        # Meatjacker returns to owner's hand when destroyed
+        if (c.name or '').strip().lower() == 'meatjacker':
+            owner.hand.append(c)
+            console.print(f"[yellow]{c.name} destroyed and returns to hand![/yellow]")
+            log(f"[destroy] {owner.name}:{c.name} -> Hand (Meatjacker rule)")
+            record(f"{owner.name}'s {c.name} destroyed and returns to hand")
+        elif c.is_titan:
             console.print(f"[red]{c.name} (Titan) destroyed and burned![/red]")
             log(f"[destroy] {owner.name}:{c.name} (burn)")
             record(f"{owner.name}'s {c.name} destroyed")
@@ -523,57 +468,63 @@ def distribute_wind(owner: Player, total: int, *, auto: bool = False, allow_canc
             if target.new_this_turn:
                 console.print(f"[yellow]{target.name} is new this turn and cannot pay.[/yellow]")
                 continue
-            target.wind += 1
-            applied += 1
-            record(f"{owner.name} pays 1 wind with {target.name} (now {target.wind})")
-            log(f"[wind+] {owner.name}:{target.name} -> {target.wind}")
-        if applied == 0:
-            console.print("[yellow]No wind applied; try again.[/yellow]")
-            continue
-        remaining -= applied
-    for c in list(owner.field):
-        destroy_if_needed(owner, c)
-    return True
+            if c.wind >= 4:
+                # REACTIVE MUNITIONS: If Dormex Lurker is destroyed, destroy the goon that destroyed it
+                if (c.name or '').strip().lower() == 'dormex lurker':
+                    # Find last attacker (if tracked)
+                    if hasattr(c, 'last_attacker') and c.last_attacker:
+                        attacker = c.last_attacker
+                        destroy_if_needed(attacker[0], attacker[1])
+                        record(f"Dormex Lurker's REACTIVE MUNITIONS destroys {attacker[1].name}!")
+                        console.print(f"[red]Dormex Lurker's REACTIVE MUNITIONS destroys {attacker[1].name}![/red]")
+                if c in owner.field:
+                    owner.field.remove(c)
+                if c.is_titan:
+                    console.print(f"[red]{c.name} (Titan) destroyed and burned![/red]")
+                    log(f"[destroy] {owner.name}:{c.name} (burn)")
+                    record(f"{owner.name}'s {c.name} destroyed")
+                else:
+                    owner.dead_pool.append(c)
+                    console.print(f"[red]{c.name} destroyed → Dead Pool[/red]")
+                    log(f"[destroy] {owner.name}:{c.name} -> Dead Pool")
+                    record(f"{owner.name}'s {c.name} destroyed")
+                if is_squad_leader(c):
+                    loser = owner.name
+                    winner = "PCU" if loser == "NARC" else "NARC"
+                    console.print(
+                        f"[bold red]GAME OVER[/bold red] — {loser}'s Squad Leader ({c.name}) was destroyed. "
+                        f"[bold green]{winner} wins![/bold green]"
+                    )
+                    log(f"[gameover] leader destroyed: loser={loser}, card={c.name}, winner={winner}")
+                    if _GLOG:
+                        _GLOG.write("=== game end ===\n")
+                        _GLOG.flush()
+                        _GLOG.close()
+                    console.print(f"[bold]Full game log saved to:[/bold] {GAMELOG_PATH}")
+                    if _LOG:
+                        _LOG.flush()
+                        _LOG.close()
+                    raise SystemExit(0)
+            # (Removed unreachable Familiar Assist code)
 
-def pay_deploy(owner: Player, c: Card, *, auto: bool = False, allow_cancel: bool = False) -> Optional[bool]:
-    if c.deploy_wind > 0:
-        log(f"[deploy-cost] {c.name}: wind {c.deploy_wind}")
-        return distribute_wind(owner, c.deploy_wind, auto=auto, allow_cancel=allow_cancel)
-    return True
+    # Enforce dead pool resource checks for ability costs (meat/gear)
+    import sys
+    test_mode = not sys.stdin.isatty() or "--test" in sys.argv
+    g = None
+    try:
+        from inspect import currentframe, getouterframes
+        stack = getouterframes(currentframe(), 2)
+        for frame in stack:
+            if "g" in frame.frame.f_locals:
+                g = frame.frame.f_locals["g"]
+                break
+    except Exception:
+        pass
+    if g is not None:
+        combined_dead_pool = g.narc_player.dead_pool + g.pcu_player.dead_pool
+        meat_available = sum(1 for card in combined_dead_pool if getattr(card, "is_bio", False))
+        gear_available = sum(1 for card in combined_dead_pool if getattr(card, "is_mech", False))
 
-def pay_ability(owner: Player, a: Ability, source: Card) -> bool:
-    # FAMILIAR ASSIST: Nives can contribute wind to pay for Vex's abilities
-    # Only applies if source is Vex and Nives is in play
-    if (source.name or '').strip().lower() == 'vex':
-        nives = next((c for c in owner.field if (c.name or '').strip().lower() == 'nives'), None)
-        if nives and a.wind_cost > 0:
-            try:
-                assist = int(Prompt.ask(f"FAMILIAR ASSIST: How much wind should Nives contribute to pay for Vex's ability? (0-{a.wind_cost})", default="0"))
-                assist = max(0, min(a.wind_cost, assist))
-            except Exception:
-                assist = 0
-            for _ in range(assist):
-                nives.wind += 1
-                record(f"Nives pays 1 wind for Vex (FAMILIAR ASSIST, now {nives.wind})")
-                log(f"[wind+] {owner.name}:Nives -> {nives.wind}")
-            for _ in range(a.wind_cost - assist):
-                source.wind += 1
-                record(f"{owner.name} pays 1 wind with {source.name} (now {source.wind})")
-                log(f"[wind+] {owner.name}:{source.name} -> {source.wind}")
-            destroy_if_needed(owner, nives)
-            destroy_if_needed(owner, source)
-            if a.gear_cost or a.meat_cost or a.power_cost:
-                console.print("[yellow]Note: non-wind costs present (gear/meat/power) — not enforced in this build.[/yellow]")
-            return True
-    # Default: pay all wind cost from source
-    for _ in range(a.wind_cost):
-        source.wind += 1
-        record(f"{owner.name} pays 1 wind with {source.name} (now {source.wind})")
-        log(f"[wind+] {owner.name}:{source.name} -> {source.wind}")
-    destroy_if_needed(owner, source)
-    if a.gear_cost or a.meat_cost or a.power_cost:
-        console.print("[yellow]Note: non-wind costs present (gear/meat/power) — not enforced in this build.[/yellow]")
-    return True
 
 def apply_wind_with_resist(attacker_owner: Player, defender_owner: Player, target: Card, amount: int) -> int:
     """Enemy ability adds wind to target; ✋ reduces by 1."""
@@ -605,6 +556,9 @@ def apply_wind_with_resist(attacker_owner: Player, defender_owner: Player, targe
     record(f"Wind to {target.name}: +{actual}" + (" (resist -1)" if reduction else ""))
     for _ in range(actual):
         target.wind += 1
+        # Track last attacker for REACTIVE MUNITIONS
+        if (target.name or '').strip().lower() == 'dormex lurker':
+            target.last_attacker = (attacker_owner, attacker_owner.field[0] if attacker_owner.field else None)
     destroy_if_needed(defender_owner, target)
     return actual
 
@@ -735,7 +689,7 @@ def display_hand(p: Player):
 
 # ============================== Turn flow ==============================
 
-def start_game(opening_hand_size: int = 6) -> GameState:
+def start_game(opening_hand_size: int = 6, initial_faction: str = "NARC") -> GameState:
     import sys
     test_mode = not sys.stdin.isatty() or "--test" in sys.argv
     try:
@@ -750,13 +704,20 @@ def start_game(opening_hand_size: int = 6) -> GameState:
 
     narc_deck = _dedupe_uniques(narc_deck, "NARC")
     pcu_deck = _dedupe_uniques(pcu_deck, "PCU")
-
     random.shuffle(narc_deck)
     random.shuffle(pcu_deck)
 
     # Forced starters: Lokar (NARC) and Grim (PCU)
     lokar, narc_deck, pcu_deck = _pull_named_starter(narc_deck, pcu_deck, ["lokar", "lokar simmons"])
     grim, pcu_deck, narc_deck = _pull_named_starter(pcu_deck, narc_deck, ["grim"])
+
+    # Remove all Grim and Lokar from both decks except the starter cards themselves
+    def is_lokar(card):
+        return _name_matches(card.name, ["lokar", "lokar simmons"])
+    def is_grim(card):
+        return _name_matches(card.name, ["grim"])
+    narc_deck = [c for c in narc_deck if not is_lokar(c) and not is_grim(c)]
+    pcu_deck = [c for c in pcu_deck if not is_lokar(c) and not is_grim(c)]
 
     narc_field: List[Card] = []
     pcu_field: List[Card] = []
@@ -797,13 +758,22 @@ def start_game(opening_hand_size: int = 6) -> GameState:
     return GameState(
         Player("NARC", deck=narc_deck, hand=narc_hand, field=narc_field),
         Player("PCU", deck=pcu_deck, hand=pcu_hand, field=pcu_field),
-        active_faction="NARC",
+        active_faction=initial_faction,
     )
+
+def _dedupe_uniques(deck, faction):
+    # TODO: Implement actual deduplication logic if needed
+    return deck
 
 def unwind_phase(p: Player):
     import sys
     test_mode = not sys.stdin.isatty() or "--test" in sys.argv
     for c in p.field:
+        if getattr(c, 'shackled', 0) > 0:
+            # Skip unwind for shackled goons
+            log(f"[shackle] {p.name}:{c.name} does not unwind (shackled)")
+            c.shackled -= 1
+            continue
         if not c.no_unwind and c.wind > 0:
             c.wind -= 1
             log(f"[unwind] {p.name}:{c.name} -> {c.wind}")
@@ -814,15 +784,130 @@ def unwind_phase(p: Player):
     if not test_mode:
         console.print("\nSTART OF TURN: Unwind applied (-1 wind each).")
 
-def deploy_card(p: Player, hand_idx: int, *, auto: bool = False, g: Optional[GameState] = None):
+# def deploy_card(p: Player, hand_idx: int, *, auto: bool = False, g: Optional[GameState] = None):
+def pay_deploy(owner: "Player", c: "Card", *, auto: bool = False, allow_cancel: bool = False) -> Optional[bool]:
+    if c.deploy_wind > 0:
+        return distribute_wind(owner, c.deploy_wind, auto=auto, allow_cancel=allow_cancel)
+    return True
 
+def pay_ability(owner: "Player", ability, card, *, auto: bool = False, allow_cancel: bool = False) -> Optional[bool]:
     import sys
     test_mode = not sys.stdin.isatty() or "--test" in sys.argv
+    g = None
     try:
-        c = p.hand[hand_idx]
-    except IndexError:
+        from inspect import currentframe, getouterframes
+        stack = getouterframes(currentframe(), 2)
+        for frame in stack:
+            if "g" in frame.frame.f_locals:
+                g = frame.frame.f_locals["g"]
+                break
+    except Exception:
+        pass
+    if g is not None:
+        combined_dead_pool = g.narc_player.dead_pool + g.pcu_player.dead_pool
+        meat_available = sum(1 for card in combined_dead_pool if getattr(card, "is_bio", False))
+        gear_available = sum(1 for card in combined_dead_pool if getattr(card, "is_mech", False))
+        if ability.meat_cost > 0 and meat_available < ability.meat_cost:
+            log(f"[ability-block] Not enough meat in dead pool for {card.name}.{ability.name}")
+            if not test_mode:
+                console.print(f"[red]Cannot use ability {ability.name}: requires {ability.meat_cost} meat from dead pool, only {meat_available} available.[/red]")
+            return False
+        if ability.gear_cost > 0 and gear_available < ability.gear_cost:
+            log(f"[ability-block] Not enough gear in dead pool for {card.name}.{ability.name}")
+            if not test_mode:
+                console.print(f"[red]Cannot use ability {ability.name}: requires {ability.gear_cost} gear from dead pool, only {gear_available} available.[/red]")
+            return False
+        # Consume resources from dead pool
+        for _ in range(ability.meat_cost):
+            for i, dead_card in enumerate(combined_dead_pool):
+                if getattr(dead_card, "is_bio", False):
+                    for player in [g.narc_player, g.pcu_player]:
+                        if dead_card in player.dead_pool:
+                            player.dead_pool.remove(dead_card)
+                            break
+                    break
+        for _ in range(ability.gear_cost):
+            for i, dead_card in enumerate(combined_dead_pool):
+                if getattr(dead_card, "is_mech", False):
+                    for player in [g.narc_player, g.pcu_player]:
+                        if dead_card in player.dead_pool:
+                            player.dead_pool.remove(dead_card)
+                            break
+                    break
+    # Default: pay all wind cost from card
+    if ability.wind_cost > 0:
+        for _ in range(ability.wind_cost):
+            card.wind += 1
+            record(f"{owner.name} pays 1 wind with {card.name} (now {card.wind})")
+            log(f"[wind+] {owner.name}:{card.name} -> {card.wind}")
+        destroy_if_needed(owner, card)
+    if getattr(ability, "power_cost", 0):
+        console.print("[yellow]Note: power cost present — not enforced in this build.[/yellow]")
+    return True
+    import sys
+    test_mode = not sys.stdin.isatty() or "--test" in sys.argv
+    g = None
+    try:
+        from inspect import currentframe, getouterframes
+        stack = getouterframes(currentframe(), 2)
+        for frame in stack:
+            if "g" in frame.frame.f_locals:
+                g = frame.frame.f_locals["g"]
+                break
+    except Exception:
+        pass
+    if g is not None:
+        combined_dead_pool = g.narc_player.dead_pool + g.pcu_player.dead_pool
+        meat_available = sum(1 for card in combined_dead_pool if getattr(card, "is_bio", False))
+        gear_available = sum(1 for card in combined_dead_pool if getattr(card, "is_mech", False))
+        if ability.meat_cost > 0 and meat_available < ability.meat_cost:
+            log(f"[ability-block] Not enough meat in dead pool for {card.name}.{ability.name}")
+            if not test_mode:
+                console.print(f"[red]Cannot use ability {ability.name}: requires {ability.meat_cost} meat from dead pool, only {meat_available} available.[/red]")
+            return False
+        if ability.gear_cost > 0 and gear_available < ability.gear_cost:
+            log(f"[ability-block] Not enough gear in dead pool for {card.name}.{ability.name}")
+            if not test_mode:
+                console.print(f"[red]Cannot use ability {ability.name}: requires {ability.gear_cost} gear from dead pool, only {gear_available} available.[/red]")
+            return False
+        # Consume resources from dead pool
+        for _ in range(ability.meat_cost):
+            for i, dead_card in enumerate(combined_dead_pool):
+                if getattr(dead_card, "is_bio", False):
+                    for player in [g.narc_player, g.pcu_player]:
+                        if dead_card in player.dead_pool:
+                            player.dead_pool.remove(dead_card)
+                            break
+                    break
+        for _ in range(ability.gear_cost):
+            for i, dead_card in enumerate(combined_dead_pool):
+                if getattr(dead_card, "is_mech", False):
+                    for player in [g.narc_player, g.pcu_player]:
+                        if dead_card in player.dead_pool:
+                            player.dead_pool.remove(dead_card)
+                            break
+                    break
+    # Default: pay all wind cost from card
+    if ability.wind_cost > 0:
+        for _ in range(ability.wind_cost):
+            card.wind += 1
+            record(f"{owner.name} pays 1 wind with {card.name} (now {card.wind})")
+            log(f"[wind+] {owner.name}:{card.name} -> {card.wind}")
+        destroy_if_needed(owner, card)
+    if getattr(ability, "power_cost", 0):
+        console.print("[yellow]Note: power cost present — not enforced in this build.[/yellow]")
+    return True
+    if c.deploy_wind > 0:
+        return distribute_wind(owner, c.deploy_wind, auto=auto, allow_cancel=allow_cancel)
+    return True
+    if c.deploy_wind > 0:
+        return distribute_wind(owner, c.deploy_wind, auto=auto, allow_cancel=allow_cancel)
+    return True
+
+    if hasattr(c, 'shackled') and c.shackled > 0:
+        log(f"[deploy-block] {c.name} is shackled and cannot contribute wind to deploy.")
         if not test_mode:
-            return console.print("[red]Bad hand index[/red]")
+            console.print(f"[red]{c.name} is shackled and cannot contribute wind to deploy this turn.[/red]")
         return
     # Nives can only be deployed if Vex is in play
     if g is not None and (c.name or '').strip().lower() == 'nives':
@@ -881,6 +966,109 @@ def deploy_card(p: Player, hand_idx: int, *, auto: bool = False, g: Optional[Gam
     record(f"{p.name} deploys {c.name}")
 
 def use_ability(g: GameState, p: Player, c_idx: int, a_idx: int, t_idx: int | None):
+    # Dragoon LOYAL MOUNT: redirect wind damage from Krax to Dragoon
+    if (c.name or '').strip().lower() == 'dragoon' and a.name.strip().lower() == 'loyal mount':
+        krax = next((card for card in p.field if (card.name or '').strip().lower() == 'krax'), None)
+        if krax:
+            # Prompt for wind to redirect
+            wind_to_redirect = krax.wind
+            if wind_to_redirect > 0:
+                krax.wind -= wind_to_redirect
+                c.wind += wind_to_redirect
+                record(f"Dragoon takes {wind_to_redirect} wind from Krax via Loyal Mount.")
+                console.print(f"[cyan]Dragoon takes {wind_to_redirect} wind from Krax via Loyal Mount.[/cyan]")
+                destroy_if_needed(p, c)
+        c.used_this_turn = True
+        return
+
+    # Primordial Oozer GOOP: enemy goon targeting Oozer does not unwind next turn
+    if (c.name or '').strip().lower() == 'primordial oozer' and a.name.strip().lower() == 'goop':
+        # Mark enemy goon as no_unwind for next turn
+        if t_idx is not None:
+            e = g.pcu_player if p is g.narc_player else g.narc_player
+            target = e.field[t_idx]
+            target.no_unwind = True
+            record(f"{target.name} is gooped and will not unwind next turn.")
+            console.print(f"[magenta]{target.name} is gooped and will not unwind next turn![/magenta]")
+        c.used_this_turn = True
+        return
+
+    # Local Singularity DRAW FIRE: friendly goons cannot be targeted by enemy abilities while Singularity is in play
+    if (c.name or '').strip().lower() == 'local singularity' and a.name.strip().lower() == 'draw fire':
+        # Set a flag on player to prevent targeting
+        p.singularity_protect = True
+        record(f"{p.name}'s goons are protected by Singularity DRAW FIRE.")
+        console.print(f"[cyan]{p.name}'s goons are protected by Singularity DRAW FIRE.[/cyan]")
+        c.used_this_turn = True
+        return
+
+    # Krax CHAIN REACTION: if Krax destroys a goon with Bash In Skull, may add 2 wind to another target, chaining
+    if (c.name or '').strip().lower() == 'krax' and a.name.strip().lower() == 'chain reaction':
+        # Only trigger if Bash In Skull destroyed a goon
+        destroyed = False
+        e = g.pcu_player if p is g.narc_player else g.narc_player
+        for card in e.field:
+            if card.wind >= 4:
+                destroyed = True
+                break
+        if destroyed:
+            # Prompt for chain targets
+            while True:
+                available = [i for i, card in enumerate(e.field) if card.wind < 4]
+                if not available:
+                    break
+                try:
+                    idx = int(Prompt.ask(f"Chain Reaction: Add 2 wind to which enemy goon? (indexes: {available})", default=str(available[0])))
+                except Exception:
+                    break
+                if idx not in available:
+                    break
+                target = e.field[idx]
+                target.wind += 2
+                record(f"Krax Chain Reaction: {target.name} takes 2 wind.")
+                console.print(f"[red]{target.name} takes 2 wind from Krax Chain Reaction![/red]")
+                destroy_if_needed(e, target)
+                if target.wind < 4:
+                    break
+        c.used_this_turn = True
+        return
+    # Special: Blood Howler Ballistic Barrage
+    a = c.abilities[a_idx]
+    if (c.name or '').strip().lower() == 'blood howler' and a.name.strip().lower() == 'ballistic barrage':
+        if t_idx is None:
+            console.print("[red]No target selected for Ballistic Barrage.[/red]")
+            return
+        # Max spend is 4 - c.wind (cannot exceed 4 wind)
+        max_spend = 4 - c.wind
+        if max_spend < 1:
+            console.print("[red]Blood Howler is already at max wind and cannot pay more.[/red]")
+            return
+        if hasattr(console, 'input'):
+            try:
+                wind_to_spend = int(console.input(f"How much wind to spend for Ballistic Barrage? (1-{max_spend}): "))
+            except Exception:
+                wind_to_spend = max_spend
+        else:
+            wind_to_spend = max_spend
+        wind_to_spend = max(1, min(wind_to_spend, max_spend))
+        # Accumulate wind
+        c.wind += wind_to_spend
+        log(f"[wind+] {p.name}:Blood Howler -> {c.wind}")
+        # Deal damage to target enemy goon
+        target = g.pcu_player.field[t_idx] if p is g.narc_player else g.narc_player.field[t_idx]
+        if hasattr(target, 'damage'):
+            target.damage += wind_to_spend
+        else:
+            target.damage = wind_to_spend
+        record(f"{target.name} takes {wind_to_spend} damage from Ballistic Barrage!")
+        console.print(f"[red]{target.name} takes {wind_to_spend} damage from Ballistic Barrage![/red]")
+        c.used_this_turn = True
+        # If wind is now 4, destroy Blood Howler after effect resolves
+        if c.wind >= 4:
+            record(f"Blood Howler is destroyed after Ballistic Barrage!")
+            console.print(f"[red]Blood Howler is destroyed after Ballistic Barrage![/red]")
+            destroy_if_needed(p, c)
+        return
     try:
         c = p.field[c_idx]
     except IndexError:
@@ -891,12 +1079,115 @@ def use_ability(g: GameState, p: Player, c_idx: int, a_idx: int, t_idx: int | No
         return console.print("[red]This goon is new this turn and cannot act.[/red]")
     if c.used_this_turn:
         return console.print("[red]This goon already used an ability this turn.[/red]")
+    if hasattr(c, 'shackled') and c.shackled > 0:
+        return console.print(f"[red]{c.name} is shackled and cannot use abilities this turn.[/red]")
+    # Special: Detainment Probe Shackle Beam
+    a = c.abilities[a_idx]
+    if (c.name or '').strip().lower() == 'detainment probe' and a.name.strip().lower() == 'shackle beam':
+        if t_idx is None:
+            console.print("[red]No target selected for Shackle Beam.[/red]")
+            return
+        # Target enemy goon
+        target = g.pcu_player.field[t_idx] if p is g.narc_player else g.narc_player.field[t_idx]
+        target.shackled = 1  # shackled for next turn
+        record(f"{target.name} is shackled by Detainment Probe's Shackle Beam!")
+        console.print(f"[magenta]{target.name} is shackled and cannot unwind, use abilities, or pay wind next turn![/magenta]")
+        c.used_this_turn = True
+        return
 
     a = c.abilities[a_idx]
     if a.passive:
         console.print("[yellow]This ability is passive and always in effect — cannot be used.[/yellow]")
         return
-    if not pay_ability(p, a, c):
+
+    # Special: Voidling Rally Ringer ability
+    if (c.name or '').strip().lower() == 'voidling' and a.name.strip().lower() == 'rally ringer':
+        # Pay 4 wind
+        if c.wind < 4:
+            console.print("[red]Voidling does not have enough wind to use Rally Ringer (needs 4).[/red]")
+            return
+        c.wind -= 4
+        record(f"{p.name} pays 4 wind with Voidling for Rally Ringer")
+        log(f"[wind-] {p.name}:Voidling -> {c.wind}")
+        # Destroy Voidling (but ability still resolves)
+        destroy_if_needed(p, c)
+        # List available cards in deck (no duplicates)
+        unique_names = set(card.name for card in p.deck)
+        available_cards = []
+        for name in unique_names:
+            card = next((card for card in p.deck if card.name == name), None)
+            if card:
+                available_cards.append(card)
+        if not available_cards:
+            console.print("[yellow]No cards available in deck to rally.[/yellow]")
+            return
+        console.print("[bold magenta]Rally Ringer: Pick a card from your deck to move to hand:[/bold magenta]")
+        for idx, card in enumerate(available_cards):
+            console.print(f"[{idx}] {card.name}")
+        while True:
+            try:
+                pick = int(Prompt.ask("Enter the number of the card to move to hand", default="0"))
+                if 0 <= pick < len(available_cards):
+                    chosen = available_cards[pick]
+                    # Remove one instance from deck and add to hand
+                    for i, card in enumerate(p.deck):
+                        if card.name == chosen.name:
+                            p.hand.append(p.deck.pop(i))
+                            record(f"{p.name} rallies {chosen.name} to hand via Voidling Rally Ringer")
+                            console.print(f"[green]{chosen.name} moved from deck to hand![/green]")
+                            break
+                    break
+                else:
+                    console.print("[red]Invalid selection. Try again.[/red]")
+            except Exception:
+                console.print("[red]Invalid input. Try again.[/red]")
+        return
+    # ...existing code...
+
+    # Task Mistres DOMINATE ability: force enemy goon to use an ability on target of player's choice
+    if (c.name or '').strip().lower() in {'task mistres', 'task mistrex'} and a.name.strip().upper() == 'DOMINATE':
+        e = g.pcu_player if p is g.narc_player else g.narc_player
+        # Prompt for enemy goon index
+        try:
+            enemy_idx = int(Prompt.ask("Choose enemy goon to dominate (index from enemy field):", default="0"))
+            enemy_goon = e.field[enemy_idx]
+        except Exception:
+            console.print("[red]Invalid enemy goon index.[/red]")
+            return
+        # Prompt for ability index
+        try:
+            ability_idx = int(Prompt.ask(f"Choose ability to use from {enemy_goon.name} (index):", default="0"))
+            forced_ability = enemy_goon.abilities[ability_idx]
+        except Exception:
+            console.print("[red]Invalid ability index.[/red]")
+            return
+        # Prompt for target (can be any goon in play)
+        all_targets = p.field + e.field
+        try:
+            target_idx = int(Prompt.ask(f"Choose target for {enemy_goon.name}'s {forced_ability.name} (index from all goons in play):", default="0"))
+            forced_target = all_targets[target_idx]
+        except Exception:
+            console.print("[red]Invalid target index.[/red]")
+            return
+        # Use the ability (simulate as if enemy goon uses it on chosen target)
+        record(f"{p.name}: {c.name} uses DOMINATE to force {enemy_goon.name} to use {forced_ability.name} on {forced_target.name}")
+        console.print(f"[magenta]{c.name} uses DOMINATE: {enemy_goon.name} uses {forced_ability.name} on {forced_target.name}[/magenta]")
+        # Enforce ability cost for dominated goon
+        can_pay = pay_ability(e, forced_ability, enemy_goon)
+        if not can_pay:
+            console.print(f"[red]{enemy_goon.name} cannot pay the cost for {forced_ability.name}. DOMINATE fails.[/red]")
+            record(f"{enemy_goon.name} could not pay cost for DOMINATE-forced ability.")
+            return
+        # Apply effect (wind, heal, etc.)
+        if forced_ability.inflicts_wind > 0:
+            apply_wind_with_resist(e, g.pcu_player if e is g.narc_player else g.narc_player, forced_target, forced_ability.inflicts_wind)
+        elif forced_ability.removes_wind > 0:
+            removed = min(forced_ability.removes_wind, forced_target.wind)
+            forced_target.wind -= removed
+            record(f"{enemy_goon.name} removes {removed} wind from {forced_target.name}")
+            console.print(f"[green]{enemy_goon.name} uses {forced_ability.name} on {forced_target.name}[/green] (DOMINATE)")
+        enemy_goon.used_this_turn = True
+        c.used_this_turn = True
         return
 
     # Targetless draw
@@ -945,6 +1236,13 @@ def use_ability(g: GameState, p: Player, c_idx: int, a_idx: int, t_idx: int | No
         if _is_leader_protected(e, target):
             console.print("[red]Cannot target enemy Squad Leader while they control other goons.[/red]")
             return
+
+        # Revolting Disposition passive: add 1 wind to source if targeting a kobold with this passive
+        if (getattr(target, 'name', '').strip().lower() == 'kasekobald' and
+            any('revolting disposition' in (ab.name or '').strip().lower() and ab.passive for ab in target.abilities)):
+            c.wind += 1
+            record(f"{c.name} gains 1 wind from Revolting Disposition (targeted Kasekobald)")
+            console.print(f"[yellow]{c.name} gains 1 wind from Revolting Disposition![/yellow]")
 
         record(f"{p.name}: {c.name} uses {a.name} on {target.name}")
         console.print(f"[green]{c.name} uses {a.name} on {target.name}[/green] ({a.text or '—'})")
@@ -1024,87 +1322,219 @@ def ai_take_turn(g: GameState):
         console.print(f"[cyan]AI deploys hand[{di}] {p.hand[di].name}[/cyan]")
         deploy_card(p, di, auto=True, g=g)
 
-    src = _ai_pick_ability_source(p)
-    if src is not None:
-        ci, a = src
-        ti = _ai_pick_target_idx(p, e, a)
-        try:
-            use_ability(g, p, ci, a.idx, ti if ti is not None else None)
-            record(f"AI({p.name}) used an ability")
-        except Exception:
-            log(f"[ai] ability failed on {p.field[ci].name}")
+    # Aggressive AI: focus all damaging abilities on the weakest enemy goon until destroyed
+    # Find the enemy goon closest to destruction (highest wind, not protected leader)
+    legal_targets = [goon for goon in e.field if not _is_leader_protected(e, goon)]
+    if legal_targets:
+        # Sort by wind descending (closer to destruction first), then by name
+        target = sorted(legal_targets, key=lambda c: (-c.wind, c.name))[0]
+        # Find all AI goons with unused damaging abilities
+        for ci, c in enumerate(p.field):
+            if c.new_this_turn or c.used_this_turn:
+                continue
+            for a in c.abilities:
+                if a.passive or (a.max_uses_per_turn is not None and a.uses_this_turn >= a.max_uses_per_turn):
+                    continue
+                # Check for required resources in dead pool
+                combined_dead_pool = g.narc_player.dead_pool + g.pcu_player.dead_pool
+                meat_available = sum(1 for card in combined_dead_pool if getattr(card, "is_bio", False))
+                gear_available = sum(1 for card in combined_dead_pool if getattr(card, "is_mech", False))
+                if a.meat_cost > 0 and meat_available < a.meat_cost:
+                    continue
+                if a.gear_cost > 0 and gear_available < a.gear_cost:
+                    continue
+                # Friendly-only abilities: heal/support
+                if a.friendly_only or a.removes_wind > 0:
+                    # Find friendly target with wind > 0
+                    friendly_targets = [i for i, x in enumerate(p.field) if x.wind > 0]
+                    if not friendly_targets:
+                        continue
+                    target_idx = friendly_targets[0]
+                    try:
+                        use_ability(g, p, ci, a.idx, target_idx)
+                        record(f"AI({p.name}) used {c.name}.{a.name} on {p.field[target_idx].name}")
+                    except Exception:
+                        log(f"[ai] ability failed on {c.name}")
+                    continue
+                # Only use abilities that inflict wind or destroy (offensive)
+                damage = a.inflicts_wind or _infer_wind_from_text(a.text)
+                if damage > 0 or 'destroy' in a.text.lower():
+                    # Use ability on the chosen target
+                    try:
+                        use_ability(g, p, ci, a.idx, e.field.index(target))
+                        record(f"AI({p.name}) used {c.name}.{a.name} on {target.name}")
+                        # If target is destroyed, break out
+                        if target.wind >= 4 or target not in e.field:
+                            break
+                    except Exception:
+                        log(f"[ai] ability failed on {c.name}")
+            # Re-evaluate target after each attack
+            legal_targets = [goon for goon in e.field if not _is_leader_protected(e, goon)]
+            if legal_targets:
+                target = sorted(legal_targets, key=lambda c: (-c.wind, c.name))[0]
+            else:
+                break
+    else:
+        # Fallback: use any available ability
+        src = _ai_pick_ability_source(p)
+        if src is not None:
+            ci, a = src
+            ti = _ai_pick_target_idx(p, e, a)
+            try:
+                use_ability(g, p, ci, a.idx, ti if ti is not None else None)
+                record(f"AI({p.name}) used an ability")
+            except Exception:
+                log(f"[ai] ability failed on {p.field[ci].name}")
 
 # ============================== Main loop ==============================
 
+def log(msg: str) -> None:
+    if _LOG:
+        _LOG.write(msg.rstrip() + "\n")
+        _LOG.flush()
+
+def record(event: str) -> None:
+    msg = event.strip()
+    GAME_LOG.append(msg)
+    TURN_BUFFER.append(msg)
+    if _GLOG:
+        _GLOG.write(msg + "\n")
+        _GLOG.flush()
+    log(f"[ev] {msg}")
+
+def get_next_command(prompt: str, default: Optional[str] = None) -> str:
+    global _CMD_SOURCE
+    if _CMD_SOURCE is None:
+        _CMD_SOURCE = _build_cmd_source()
+    if _CMD_SOURCE.queue:
+        cmd = _CMD_SOURCE.queue.popleft()
+        log(f"[cmd] {cmd}")
+        return cmd
+    while True:
+        try:
+            raw = Prompt.ask(prompt, default=default or "")
+        except (KeyboardInterrupt, EOFError):
+            choice = _CMD_SOURCE.default_on_interrupt
+            if choice == "__RETRY__":
+                print("\n(ignored; re-prompt)")
+                continue
+            if choice is None:
+                print("\n(exiting)")
+                if _LOG:
+                    _LOG.close()
+                if _GLOG:
+                    _GLOG.write("=== game end (interrupt) ===\n")
+                    _GLOG.flush()
+                    _GLOG.close()
+                raise SystemExit(0)
+            log(f"[cmd] <interrupt->'{choice or ''}'>")
+            return choice or ""
+        raw = (raw or "").strip()
+        if raw.lower() in {"q", "quit", "exit"}:
+            if _LOG:
+                _LOG.close()
+            if _GLOG:
+                _GLOG.write("=== game end (quit) ===\n")
+                _GLOG.flush()
+                _GLOG.close()
+            raise SystemExit(0)
+        log(f"[cmd] {raw}")
+        return raw
+
+def _build_cmd_source(argv: Optional[List[str]] = None) -> _CommandSource:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--moves", help="Comma-separated commands, e.g. d0,u0.0>0,e")
+    parser.add_argument("--moves-file", help="One command per line; '#' for comments.")
+    parser.add_argument("--default-on-interrupt", choices=["e", "skip", "exit", "none"], default="exit")
+    parser.add_argument("--log", help="Path to transcript/debug file (append).")
+    parser.add_argument("--gamelog", help="Path to write the structured game log (txt).")
+    parser.add_argument("--ai", choices=["NARC", "PCU", "BOTH"], help="Enable simple AI for a side.")
+    try:
+        ns, _ = parser.parse_known_args(argv)
+    except SystemExit:
+        ns = type(
+            "NS", (), {"moves": None, "moves_file": None, "default_on_interrupt": "exit", "log": None, "gamelog": None, "ai": None}
+        )()
+
+    global _LOG
+    if getattr(ns, "log", None):
+        try:
+            _LOG = open(ns.log, "a", encoding="utf-8")
+            log("=== session start ===")
+        except Exception as e:
+            console.print(f"[yellow]Could not open log file: {e}[/yellow]")
+
+    global _GLOG, GAMELOG_PATH
+    GAMELOG_PATH = getattr(ns, "gamelog", None)
+    if not GAMELOG_PATH:
+        GAMELOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_log.txt")
+    try:
+        _GLOG = open(GAMELOG_PATH, "a", encoding="utf-8")
+        _GLOG.write("=== game start ===\n")
+        _GLOG.flush()
+    except Exception as e:
+        console.print(f"[yellow]Could not open game log file: {e}[/yellow]")
+
+    global AI_NARC, AI_PCU
+    AI_NARC = (ns.ai in ("NARC", "BOTH"))
+    AI_PCU = (ns.ai in ("PCU", "BOTH"))
+    if AI_NARC or AI_PCU:
+        sides = " & ".join([s for s, flag in (("NARC", AI_NARC), ("PCU", AI_PCU)) if flag])
+        console.print(f"[cyan]AI enabled for: {sides}[/cyan]")
+        log(f"[ai] enabled for {sides}")
+
+    q: Deque[str] = deque()
+    if getattr(ns, "moves", None):
+        for t in ns.moves.split(","):
+            if t.strip():
+                q.append(t.strip())
+    if getattr(ns, "moves_file", None):
+        try:
+            with open(ns.moves_file, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        q.append(line)
+        except FileNotFoundError:
+            print(f"[io] moves file not found: {ns.moves_file}")
+
+    default_map = {"e": "e", "skip": "", "exit": None, "none": "__RETRY__"}
+    return _CommandSource(queue=q, default_on_interrupt=default_map.get(ns.default_on_interrupt, None))
+
 def main_loop_rich():
-    import sys
-    print("ARGS:", sys.argv, flush=True)
-    # Print which AI is enabled for test assertions (defensive)
-    if 'NARC' in ' '.join(sys.argv):
-        print("AI enabled for: NARC", flush=True)
-    if 'PCU' in ' '.join(sys.argv):
-        print("AI enabled for: PCU", flush=True)
-    # Print which AI is enabled for test assertions
-    if AI_NARC:
-        print("AI enabled for: NARC")
-    if AI_PCU:
-        print("AI enabled for: PCU")
-    # TEST MODE: auto-end after max_turns if set
-    import os
-    max_turns = int(os.environ.get("GSGSIM_MAX_TURNS", "50"))
-    test_mode = not sys.stdin.isatty() or "--test" in sys.argv
+    global LAST_TURN_SUMMARY, _CMD_SOURCE
+    # Ensure AI flags are set before any game logic
+    if _CMD_SOURCE is None:
+        _CMD_SOURCE = _build_cmd_source()
 
-    global LAST_TURN_SUMMARY
-
-    # Determine which faction is AI and which is human
-    # If both AI, human_side is None
+    # Determine which side is human and initial faction after AI flags are set
     if AI_NARC and not AI_PCU:
         human_side = "PCU"
     elif AI_PCU and not AI_NARC:
         human_side = "NARC"
+    elif AI_NARC and AI_PCU:
+        human_side = None  # Both AI
     else:
-        human_side = None
+        human_side = "NARC"  # Default: human is NARC
 
-    # Randomly select which faction goes first
-    import random
-    first_faction = random.choice(["NARC", "PCU"])
-    g = start_game()
-    g.active_faction = first_faction
+    if human_side:
+        initial_faction = human_side
+        console.print(f"[bold green]You are playing as: {human_side}[/bold green]")
+    else:
+        initial_faction = "NARC"  # Both AI, default to NARC
+        console.print(f"[bold yellow]Both sides are AI. No human turns.[/bold yellow]")
+
+    g = start_game(initial_faction=initial_faction)
     turn = 1
 
-    # Determine which player is human and which is AI
-    if human_side == "NARC":
-        human_player = g.narc_player
-        ai_player = g.pcu_player
-    elif human_side == "PCU":
-        human_player = g.pcu_player
-        ai_player = g.narc_player
-    else:
-        human_player = None
-        ai_player = None
-
     while True:
-        try:
-            if test_mode and turn > max_turns:
-                print(f"[yellow]Test mode: max turns reached ({max_turns}). Exiting.[/yellow]")
-                break
-            # ...existing code for each turn...
-        except Exception as ex:
-            print(f"[red]Error in main loop: {ex}[/red]")
-            import traceback
-            traceback.print_exc()
-            break
-        # Set p/e so that p is always the current player, e is the opponent
-        if g.active_faction == "NARC":
-            p = g.narc_player
-            e = g.pcu_player
-        else:
-            p = g.pcu_player
-            e = g.narc_player
+        # Assign p/e for current turn
+        p = g.narc_player if g.active_faction == "NARC" else g.pcu_player
+        e = g.pcu_player if p is g.narc_player else g.narc_player
 
         # Previous enemy turn summary
         if LAST_TURN_SUMMARY and LAST_TURN_SUMMARY.get("side") != g.active_faction:
-            lines: List[str] = list(LAST_TURN_SUMMARY.get("events", []))  # type: ignore[arg-type]
+            lines: List[str] = list(LAST_TURN_SUMMARY.get("events", []))
             if lines:
                 summary = "\n".join(f"• {s}" for s in lines)
                 console.print(Panel(summary, title=f"Previous Turn — {LAST_TURN_SUMMARY['side']} (Turn {LAST_TURN_SUMMARY['turn']})"))
@@ -1116,121 +1546,63 @@ def main_loop_rich():
         display_field(p, e)
         display_hand(p)
 
-        # Only prompt human for their assigned faction; AI always plays the other side
-        if human_side == "PCU":
-            if g.active_faction == "PCU":
-                # Human's turn (PCU)
-                while True:
-                    cmd = get_next_command("[yellow]Your move[/yellow]")
-                    if cmd == "":
-                        # In non-interactive mode, auto-end turn if no more scripted moves
-                        if not sys.stdin.isatty():
-                            cmd = "e"
-                        else:
-                            continue
-                    if cmd in {"e", "end"}:
-                        LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
-                        TURN_BUFFER.clear()
-                        g.active_faction = "NARC"
-                        turn += 1
-                        break
-                    if cmd in {"s", "show"}:
-                        display_field(p, e)
-                        display_hand(p)
-                        continue
-                    if cmd.startswith("d") and cmd[1:].isdigit():
-                        deploy_card(p, int(cmd[1:]), g=g)
-                        display_field(p, e)
-                        display_hand(p)
-                        continue
-                    if cmd.startswith("v"):
-                        try:
-                            parts = cmd.split()
-                            if len(parts) < 2:
-                                console.print("[red]Usage: v[h|f|e]#[/red]")
-                            else:
-                                token = parts[1]
-                                scope = "h"
-                                idx_str = token
-                                if token and token[0].lower() in {"h", "f", "e"}:
-                                    scope, idx_str = token[0].lower(), token[1:]
-                                idx = int(idx_str)
-                                if scope == "h":
-                                    _open_card_image(p.hand[idx], True)
-                                elif scope == "f":
-                                    _open_card_image(p.field[idx], True)
-                                else:
-                                    _open_card_image(e.field[idx], True)
-                        except Exception:
+        # AI turn
+        is_ai_turn = (g.active_faction == "NARC" and AI_NARC) or (g.active_faction == "PCU" and AI_PCU)
+        if is_ai_turn:
+            ai_take_turn(g)
+            display_field(p, e)
+            display_hand(p)
+            LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
+            TURN_BUFFER.clear()
+            g.active_faction = "PCU" if g.active_faction == "NARC" else "NARC"
+            turn += 1
+            continue
+
+        # Human turn only if active_faction matches human_side
+        if human_side and g.active_faction == human_side:
+            while True:
+                cmd = get_next_command("[yellow]Your move[/yellow]")
+                if cmd == "":
+                    continue
+                if cmd in {"e", "end"}:
+                    LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
+                    TURN_BUFFER.clear()
+                    g.active_faction = "PCU" if g.active_faction == "NARC" else "NARC"
+                    turn += 1
+                    break
+
+                if cmd in {"s", "show"}:
+                    display_field(p, e)
+                    display_hand(p)
+                    continue
+
+                if cmd.startswith("d") and cmd[1:].isdigit():
+                    deploy_card(p, int(cmd[1:]), g=g)
+                    display_field(p, e)
+                    display_hand(p)
+                    continue
+
+                if cmd.startswith("v"):
+                    try:
+                        parts = cmd.split()
+                        if len(parts) < 2:
                             console.print("[red]Usage: v[h|f|e]#[/red]")
-                        continue
-            else:
-                # AI's turn (NARC)
-                ai_take_turn(g)
-                display_field(p, e)
-                display_hand(p)
-                LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
-                TURN_BUFFER.clear()
-                g.active_faction = "PCU"
-                turn += 1
-                continue
-        elif human_side == "NARC":
-            if g.active_faction == "NARC":
-                # Human's turn (NARC)
-                while True:
-                    cmd = get_next_command("[yellow]Your move[/yellow]")
-                    if cmd == "":
-                        # In non-interactive mode, auto-end turn if no more scripted moves
-                        if not sys.stdin.isatty():
-                            cmd = "e"
                         else:
-                            continue
-                    if cmd in {"e", "end"}:
-                        LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
-                        TURN_BUFFER.clear()
-                        g.active_faction = "PCU"
-                        turn += 1
-                        break
-                    if cmd in {"s", "show"}:
-                        display_field(p, e)
-                        display_hand(p)
-                        continue
-                    if cmd.startswith("d") and cmd[1:].isdigit():
-                        deploy_card(p, int(cmd[1:]), g=g)
-                        display_field(p, e)
-                        display_hand(p)
-                        continue
-                    if cmd.startswith("v"):
-                        try:
-                            parts = cmd.split()
-                            if len(parts) < 2:
-                                console.print("[red]Usage: v[h|f|e]#[/red]")
+                            token = parts[1]
+                            scope = "h"
+                            idx_str = token
+                            if token and token[0].lower() in {"h", "f", "e"}:
+                                scope, idx_str = token[0].lower(), token[1:]
+                            idx = int(idx_str)
+                            if scope == "h":
+                                _open_card_image(p.hand[idx], True)
+                            elif scope == "f":
+                                _open_card_image(p.field[idx], True)
                             else:
-                                token = parts[1]
-                                scope = "h"
-                                idx_str = token
-                                if token and token[0].lower() in {"h", "f", "e"}:
-                                    scope, idx_str = token[0].lower(), token[1:]
-                                idx = int(idx_str)
-                                if scope == "h":
-                                    _open_card_image(p.hand[idx], True)
-                                elif scope == "f":
-                                    _open_card_image(p.field[idx], True)
-                                else:
-                                    _open_card_image(e.field[idx], True)
-                        except Exception:
-                            console.print("[red]Usage: v[h|f|e]#[/red]")
-                        continue
-            else:
-                # AI's turn (PCU)
-                ai_take_turn(g)
-                display_field(p, e)
-                display_hand(p)
-                LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
-                TURN_BUFFER.clear()
-                g.active_faction = "NARC"
-                turn += 1
-                continue
+                                _open_card_image(e.field[idx], True)
+                    except Exception:
+                        console.print("[red]Usage: v[h|f|e]#[/red]")
+                    continue
 
                 if cmd.startswith("u"):
                     try:
@@ -1253,103 +1625,16 @@ def main_loop_rich():
                                 console.print("[red]Bad use syntax. Try: u0.0  (no target)  or  u0.0>0[/red]")
                     except Exception:
                         console.print("[red]Bad use syntax. Try: u0.0  (no target)  or  u0.0>0[/red]")
-                    display_field(p, e); display_hand(p)
+                    display_field(p, e)
+                    display_hand(p)
                     continue
 
                 console.print("[red]Unknown[/red]")
         else:
-            # If not human turn, check if it's a human faction and wait for input
-            if human_side is not None and g.active_faction == human_side:
-                # Human turn: wait for input and only advance after valid move
-                while True:
-                    cmd = get_next_command("[yellow]Your move[/yellow]")
-                    if cmd == "":
-                        continue
-                    if cmd in {"e", "end"}:
-                        LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
-                        TURN_BUFFER.clear()
-                        g.active_faction = "PCU" if g.active_faction == "NARC" else "NARC"
-                        turn += 1
-                        break
-                    if cmd in {"s", "show"}:
-                        display_field(p, e)
-                        display_hand(p)
-                        continue
-                    if cmd.startswith("d") and cmd[1:].isdigit():
-                        deploy_card(p, int(cmd[1:]), g=g)
-                        display_field(p, e)
-                        display_hand(p)
-                        continue
-                    if cmd.startswith("v"):
-                        try:
-                            parts = cmd.split()
-                            if len(parts) < 2:
-                                console.print("[red]Usage: v[h|f|e]#[/red]")
-                            else:
-                                token = parts[1]
-                                scope = "h"
-                                idx_str = token
-                                if token and token[0].lower() in {"h", "f", "e"}:
-                                    scope, idx_str = token[0].lower(), token[1:]
-                                idx = int(idx_str)
-                                if scope == "h":
-                                    _open_card_image(p.hand[idx], True)
-                                elif scope == "f":
-                                    _open_card_image(p.field[idx], True)
-                                else:
-                                    _open_card_image(e.field[idx], True)
-                        except Exception:
-                            console.print("[red]Usage: v[h|f|e]#[/red]")
-                        continue
-                    if cmd.startswith("u"):
-                        try:
-                            if "." in cmd:
-                                body = cmd[1:]
-                                if ">" in body:
-                                    h, t = body.split(".", 1)
-                                    a_idx, t_idx = t.split(">", 1)
-                                    use_ability(g, p, int(h), int(a_idx), int(t_idx))
-                                else:
-                                    h, a = body.split(".", 1)
-                                    use_ability(g, p, int(h), int(a), None)
-                            else:
-                                parts = cmd.split()
-                                if parts[0] == "use" and len(parts) in (3, 5):
-                                    c_idx = int(parts[1]); a_idx = int(parts[2])
-                                    t_idx = int(parts[4]) if len(parts) == 5 else None
-                                    use_ability(g, p, c_idx, a_idx, t_idx)
-                                else:
-                                    console.print("[red]Bad use syntax. Try: u0.0  (no target)  or  u0.0>0[/red]")
-                        except Exception:
-                            console.print("[red]Bad use syntax. Try: u0.0  (no target)  or  u0.0>0[/red]")
-                        display_field(p, e); display_hand(p)
-                        continue
-                    console.print("[red]Unknown[/red]")
-            else:
-                # If not human turn, only advance if it was an AI turn
-                if (g.active_faction == "NARC" and AI_NARC) or (g.active_faction == "PCU" and AI_PCU):
-                    LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
-                    TURN_BUFFER.clear()
-                    g.active_faction = "PCU" if g.active_faction == "NARC" else "NARC"
-                    turn += 1
+            # If not human turn, just advance to next turn
+            g.active_faction = "PCU" if g.active_faction == "NARC" else "NARC"
+            turn += 1
 
-# ============================== Entry ==============================
-
+# Entry point: start the game loop if run as a script
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--ai", choices=["NARC", "PCU", "BOTH"])
-    args, _ = parser.parse_known_args()
-    if getattr(args, "ai", None) == "NARC":
-        AI_NARC = True
-    elif getattr(args, "ai", None) == "PCU":
-        AI_PCU = True
-    elif getattr(args, "ai", None) == "BOTH":
-        AI_NARC = True
-        AI_PCU = True
-    try:
-        main_loop_rich()
-    except Exception as ex:
-        import traceback
-        print("EXCEPTION:", ex, flush=True)
-        traceback.print_exc()
+    main_loop_rich()
