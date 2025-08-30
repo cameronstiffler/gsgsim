@@ -1,4 +1,5 @@
 # file: gsg_sim.py
+#
 from __future__ import annotations
 
 import argparse
@@ -935,9 +936,25 @@ def ai_take_turn(g: GameState):
 
 def main_loop_rich():
     global LAST_TURN_SUMMARY
+
+    # Determine which faction is AI and which is human
+    # If both AI, human_side is None
+    if AI_NARC and not AI_PCU:
+        human_side = "PCU"
+    elif AI_PCU and not AI_NARC:
+        human_side = "NARC"
+    else:
+        human_side = None
+
+    # Randomly select which faction goes first
+    import random
+    first_faction = random.choice(["NARC", "PCU"])
     g = start_game()
+    g.active_faction = first_faction
     turn = 1
+
     while True:
+        # Set p/e so that p is always the current player, e is the opponent
         p = g.narc_player if g.active_faction == "NARC" else g.pcu_player
         e = g.pcu_player if p is g.narc_player else g.narc_player
 
@@ -966,76 +983,83 @@ def main_loop_rich():
             turn += 1
             continue
 
-        # Human turn loop
-        while True:
-            cmd = get_next_command("[yellow]Your move[/yellow]")
-            if cmd == "":
-                continue
-            if cmd in {"e", "end"}:
-                LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
-                TURN_BUFFER.clear()
-                g.active_faction = "PCU" if g.active_faction == "NARC" else "NARC"
-                turn += 1
-                break
+        # Human turn only if human_side matches current active_faction
+        if human_side is not None and g.active_faction == human_side:
+            while True:
+                cmd = get_next_command("[yellow]Your move[/yellow]")
+                if cmd == "":
+                    continue
+                if cmd in {"e", "end"}:
+                    LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
+                    TURN_BUFFER.clear()
+                    g.active_faction = "PCU" if g.active_faction == "NARC" else "NARC"
+                    turn += 1
+                    break
 
-            if cmd in {"s", "show"}:
-                display_field(p, e)
-                display_hand(p)
-                continue
+                if cmd in {"s", "show"}:
+                    display_field(p, e)
+                    display_hand(p)
+                    continue
 
-            if cmd.startswith("d") and cmd[1:].isdigit():
-                deploy_card(p, int(cmd[1:]), g=g)
-                display_field(p, e)
-                display_hand(p)
-                continue
+                if cmd.startswith("d") and cmd[1:].isdigit():
+                    deploy_card(p, int(cmd[1:]), g=g)
+                    display_field(p, e)
+                    display_hand(p)
+                    continue
 
-            if cmd.startswith("v"):
-                try:
-                    parts = cmd.split()
-                    if len(parts) < 2:
-                        console.print("[red]Usage: v[h|f|e]#[/red]")
-                    else:
-                        token = parts[1]
-                        scope = "h"
-                        idx_str = token
-                        if token and token[0].lower() in {"h", "f", "e"}:
-                            scope, idx_str = token[0].lower(), token[1:]
-                        idx = int(idx_str)
-                        if scope == "h":
-                            _open_card_image(p.hand[idx], True)
-                        elif scope == "f":
-                            _open_card_image(p.field[idx], True)
-                        else:
-                            _open_card_image(e.field[idx], True)
-                except Exception:
-                    console.print("[red]Usage: v[h|f|e]#[/red]")
-                continue
-
-            if cmd.startswith("u"):
-                try:
-                    if "." in cmd:
-                        body = cmd[1:]
-                        if ">" in body:
-                            h, t = body.split(".", 1)
-                            a_idx, t_idx = t.split(">", 1)
-                            use_ability(g, p, int(h), int(a_idx), int(t_idx))
-                        else:
-                            h, a = body.split(".", 1)
-                            use_ability(g, p, int(h), int(a), None)
-                    else:
+                if cmd.startswith("v"):
+                    try:
                         parts = cmd.split()
-                        if parts[0] == "use" and len(parts) in (3, 5):
-                            c_idx = int(parts[1]); a_idx = int(parts[2])
-                            t_idx = int(parts[4]) if len(parts) == 5 else None
-                            use_ability(g, p, c_idx, a_idx, t_idx)
+                        if len(parts) < 2:
+                            console.print("[red]Usage: v[h|f|e]#[/red]")
                         else:
-                            console.print("[red]Bad use syntax. Try: u0.0  (no target)  or  u0.0>0[/red]")
-                except Exception:
-                    console.print("[red]Bad use syntax. Try: u0.0  (no target)  or  u0.0>0[/red]")
-                display_field(p, e); display_hand(p)
-                continue
+                            token = parts[1]
+                            scope = "h"
+                            idx_str = token
+                            if token and token[0].lower() in {"h", "f", "e"}:
+                                scope, idx_str = token[0].lower(), token[1:]
+                            idx = int(idx_str)
+                            if scope == "h":
+                                _open_card_image(p.hand[idx], True)
+                            elif scope == "f":
+                                _open_card_image(p.field[idx], True)
+                            else:
+                                _open_card_image(e.field[idx], True)
+                    except Exception:
+                        console.print("[red]Usage: v[h|f|e]#[/red]")
+                    continue
 
-            console.print("[red]Unknown[/red]")
+                if cmd.startswith("u"):
+                    try:
+                        if "." in cmd:
+                            body = cmd[1:]
+                            if ">" in body:
+                                h, t = body.split(".", 1)
+                                a_idx, t_idx = t.split(">", 1)
+                                use_ability(g, p, int(h), int(a_idx), int(t_idx))
+                            else:
+                                h, a = body.split(".", 1)
+                                use_ability(g, p, int(h), int(a), None)
+                        else:
+                            parts = cmd.split()
+                            if parts[0] == "use" and len(parts) in (3, 5):
+                                c_idx = int(parts[1]); a_idx = int(parts[2])
+                                t_idx = int(parts[4]) if len(parts) == 5 else None
+                                use_ability(g, p, c_idx, a_idx, t_idx)
+                            else:
+                                console.print("[red]Bad use syntax. Try: u0.0  (no target)  or  u0.0>0[/red]")
+                    except Exception:
+                        console.print("[red]Bad use syntax. Try: u0.0  (no target)  or  u0.0>0[/red]")
+                    display_field(p, e); display_hand(p)
+                    continue
+
+                console.print("[red]Unknown[/red]")
+        else:
+            # If not human turn, just switch to next faction
+            LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
+            TURN_BUFFER.clear()
+            g.active_faction = "PCU" if g.active_faction == "NARC" else "NARC"
+            turn += 1
 
 # ============================== Entry ==============================
 
