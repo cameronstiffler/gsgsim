@@ -983,8 +983,8 @@ def main_loop_rich():
             turn += 1
             continue
 
-        # Human turn only if human_side matches current active_faction
-        if human_side is not None and g.active_faction == human_side:
+        # Human turn (always wait for input if not AI)
+        if human_side is None or g.active_faction == human_side:
             while True:
                 cmd = get_next_command("[yellow]Your move[/yellow]")
                 if cmd == "":
@@ -1055,11 +1055,80 @@ def main_loop_rich():
 
                 console.print("[red]Unknown[/red]")
         else:
-            # If not human turn, just switch to next faction
-            LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
-            TURN_BUFFER.clear()
-            g.active_faction = "PCU" if g.active_faction == "NARC" else "NARC"
-            turn += 1
+            # If not human turn, check if it's a human faction and wait for input
+            if human_side is not None and g.active_faction == human_side:
+                # Human turn: wait for input and only advance after valid move
+                while True:
+                    cmd = get_next_command("[yellow]Your move[/yellow]")
+                    if cmd == "":
+                        continue
+                    if cmd in {"e", "end"}:
+                        LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
+                        TURN_BUFFER.clear()
+                        g.active_faction = "PCU" if g.active_faction == "NARC" else "NARC"
+                        turn += 1
+                        break
+                    if cmd in {"s", "show"}:
+                        display_field(p, e)
+                        display_hand(p)
+                        continue
+                    if cmd.startswith("d") and cmd[1:].isdigit():
+                        deploy_card(p, int(cmd[1:]), g=g)
+                        display_field(p, e)
+                        display_hand(p)
+                        continue
+                    if cmd.startswith("v"):
+                        try:
+                            parts = cmd.split()
+                            if len(parts) < 2:
+                                console.print("[red]Usage: v[h|f|e]#[/red]")
+                            else:
+                                token = parts[1]
+                                scope = "h"
+                                idx_str = token
+                                if token and token[0].lower() in {"h", "f", "e"}:
+                                    scope, idx_str = token[0].lower(), token[1:]
+                                idx = int(idx_str)
+                                if scope == "h":
+                                    _open_card_image(p.hand[idx], True)
+                                elif scope == "f":
+                                    _open_card_image(p.field[idx], True)
+                                else:
+                                    _open_card_image(e.field[idx], True)
+                        except Exception:
+                            console.print("[red]Usage: v[h|f|e]#[/red]")
+                        continue
+                    if cmd.startswith("u"):
+                        try:
+                            if "." in cmd:
+                                body = cmd[1:]
+                                if ">" in body:
+                                    h, t = body.split(".", 1)
+                                    a_idx, t_idx = t.split(">", 1)
+                                    use_ability(g, p, int(h), int(a_idx), int(t_idx))
+                                else:
+                                    h, a = body.split(".", 1)
+                                    use_ability(g, p, int(h), int(a), None)
+                            else:
+                                parts = cmd.split()
+                                if parts[0] == "use" and len(parts) in (3, 5):
+                                    c_idx = int(parts[1]); a_idx = int(parts[2])
+                                    t_idx = int(parts[4]) if len(parts) == 5 else None
+                                    use_ability(g, p, c_idx, a_idx, t_idx)
+                                else:
+                                    console.print("[red]Bad use syntax. Try: u0.0  (no target)  or  u0.0>0[/red]")
+                        except Exception:
+                            console.print("[red]Bad use syntax. Try: u0.0  (no target)  or  u0.0>0[/red]")
+                        display_field(p, e); display_hand(p)
+                        continue
+                    console.print("[red]Unknown[/red]")
+            else:
+                # If not human turn, only advance if it was an AI turn
+                if (g.active_faction == "NARC" and AI_NARC) or (g.active_faction == "PCU" and AI_PCU):
+                    LAST_TURN_SUMMARY = {"side": p.name, "turn": turn, "events": TURN_BUFFER.copy()}
+                    TURN_BUFFER.clear()
+                    g.active_faction = "PCU" if g.active_faction == "NARC" else "NARC"
+                    turn += 1
 
 # ============================== Entry ==============================
 
