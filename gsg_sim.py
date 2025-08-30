@@ -575,7 +575,15 @@ def draw_card(p: Player):
         card = p.deck.pop()
         p.hand.append(card)
         log(f"[draw] {p.name}:{card.name}")
-        record(f"{p.name} draws: {card.name}")
+        # Only reveal card name if human player is drawing
+        from inspect import currentframe, getouterframes
+        # Check if called from ai_take_turn
+        stack = getouterframes(currentframe(), 2)
+        called_by_ai = any('ai_take_turn' in f.function for f in stack)
+        if called_by_ai:
+            record(f"{p.name} drew a card")
+        else:
+            record(f"{p.name} draws: {card.name}")
 
 def format_cost(w, g, m, p):
     parts = []
