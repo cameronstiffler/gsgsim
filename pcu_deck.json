@@ -17,15 +17,22 @@
     "requirements": "Krax must be in play to deploy Dragoon.",
     "abilities": [
       {
-        "name": "ATTACK",
+        "name": "DIVE ATTACK",
         "cost": [
           "1w"
         ],
         "text": "Add 1 wind to target Goon"
+      },
+      {
+        "name": "LOYAL MOUNT",
+        "cost": [
+          "p"
+        ],
+        "text": "Some or all wind applied to Krax as damage from enemy Goon ability may be applied to Dragoon instead."
       }
     ],
     "notes": [
-      "If Krax is destroyed so is Dragoon. Some or all wind applied to Krax as damage may be applied to Dragoon instead."
+      "If Krax is destroyed so is Dragoon. "
     ],
     "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/pcu/dragoon.png",
     "image_url_mini": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/pcu/mini/dragoon.jpg"
@@ -119,7 +126,7 @@
     "faction": "pcu",
     "duplicates": "4",
     "deploy_cost": [
-      "6w"
+      "12w"
     ],
     "icons": [
       "pcu"
@@ -342,16 +349,22 @@
     "requirements": "Vex must be in play to deploy Nives.",
     "abilities": [
       {
-        "name": "SABER TEETH",
+        "name": "SMILODON SABERS",
         "cost": [
           "1w"
         ],
         "text": "Add 2 wind to target Goon"
+      },
+      {
+        "name": "FAMILIAR ASSIST",
+        "cost": [
+          "Xw"
+        ],
+        "text": "Nives can contribute wind to pay for Vex's abilities."
       }
     ],
     "notes": [
-      "If Vex is destroyed so is Nives.",
-      "Nives can contribute wind to pay for Vex abilities."
+      "If Vex is destroyed so is Nives."
     ],
     "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/pcu/nives.png",
     "image_url_mini": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/pcu/mini/nives.jpg"

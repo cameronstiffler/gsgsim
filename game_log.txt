@@ -1,0 +1,87 @@
+=== game start ===
+PCU draws: Annihilist Overseer
+NARC draws: Hover Shield
+AI(NARC) begins turn
+NARC deploys Impact Simulant
+NARC pays 1 wind with Lokar Simmons (now 1)
+NARC pays 1 wind with Lokar Simmons (now 2)
+NARC draws: MediFlux-1NDS
+NARC: Lokar Simmons uses RESOURCEFUL — draw 1 card(s)
+AI(NARC) used an ability
+PCU draws: Annihilist Overseer
+NARC draws: Killjoy
+AI(NARC) begins turn
+NARC pays 1 wind with Impact Simulant (now 1)
+NARC deploys Sausage Droid
+NARC pays 1 wind with Lokar Simmons (now 2)
+NARC pays 1 wind with Lokar Simmons (now 3)
+NARC draws: Killjoy
+NARC: Lokar Simmons uses RESOURCEFUL — draw 1 card(s)
+AI(NARC) used an ability
+PCU draws: Void Freak
+=== game end (interrupt) ===
+=== game start ===
+=== game end (interrupt) ===
+=== game start ===
+=== game end (interrupt) ===
+=== game start ===
+PCU pays 1 wind with Grim (now 1)
+PCU pays 1 wind with Grim (now 2)
+PCU pays 1 wind with Grim (now 3)
+PCU deploys Krax
+NARC draws: Marine Marauder
+AI(NARC) begins turn
+NARC pays 1 wind with Lokar Simmons (now 1)
+NARC deploys Compliance Auditon
+NARC pays 1 wind with Lokar Simmons (now 2)
+NARC pays 1 wind with Lokar Simmons (now 3)
+NARC draws: Compliance Auditon
+NARC: Lokar Simmons uses RESOURCEFUL — draw 1 card(s)
+AI(NARC) used an ability
+PCU draws: Krax
+PCU pays 1 wind with Grim (now 3)
+PCU deploys Primordial Oozer
+PCU pays 1 wind with Krax (now 1)
+PCU pays 1 wind with Krax (now 2)
+PCU pays 1 wind with Krax (now 3)
+PCU deploys Krax
+=== game end (interrupt) ===
+=== game start ===
+PCU pays 1 wind with Grim (now 1)
+PCU pays 1 wind with Grim (now 2)
+PCU pays 1 wind with Grim (now 3)
+PCU deploys Krax
+NARC draws: Compliance Auditon
+AI(NARC) begins turn
+NARC pays 1 wind with Lokar Simmons (now 1)
+NARC deploys Compliance Auditon
+NARC pays 1 wind with Lokar Simmons (now 2)
+NARC pays 1 wind with Lokar Simmons (now 3)
+NARC drew a card
+NARC: Lokar Simmons uses RESOURCEFUL — draw 1 card(s)
+AI(NARC) used an ability
+PCU draws: Kriegsgheist
+PCU pays 1 wind with Krax (now 1)
+PCU pays 1 wind with Krax (now 2)
+PCU pays 1 wind with Krax (now 3)
+PCU deploys Dragoon
+=== game start ===
+=== game end (interrupt) ===
+=== game end (interrupt) ===
+=== game start ===
+=== game end (interrupt) ===
+=== game start ===
+=== game start ===
+=== game start ===
+=== game start ===
+=== game end (interrupt) ===
+=== game start ===
+=== game end (interrupt) ===
+=== game start ===
+=== game end (interrupt) ===
+=== game start ===
+=== game end (interrupt) ===
+=== game start ===
+=== game end (interrupt) ===
+=== game start ===
+=== game end (interrupt) ===
