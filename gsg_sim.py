@@ -1,11 +1,7 @@
-# === IMPORT SENTRY ===
-# Do not move or duplicate imports. Keep this block exactly as-is at the top.
-# Only add new imports inside this block if strictly necessary.
-# This ensures stable module resolution and prevents Copilot/other tools
-# from relocating or duplicating imports across the file.
+# === IMPORT SENTRY (do not move/duplicate) ===
 from __future__ import annotations
 
-# Standard library imports
+# stdlib
 import argparse
 import json
 import os
@@ -14,8 +10,9 @@ import re
 import sys
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, Tuple  # Third-party imports
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+# third-party
 from rich.console import Console
 from rich.table import Table
 
@@ -245,12 +242,9 @@ def _opponent_of(gs: "GameState", p: "Player") -> "Player":
 
 
 def start_of_turn(gs: "GameState") -> None:
-    """Start-of-turn upkeep for the active player.
-    - Draw 1 card.
-    - Reset per-turn ability usage counters on their board.
-    - Expire simple start-of-turn statuses if you track them.
-    - Set phase to 'main'.
-    """
+    for c in gs.turn_player.board:
+        if getattr(c, "new_this_turn", False):
+            c.new_this_turn = False
 
 
 # --- Engine stubs for UI integration ---
@@ -265,29 +259,39 @@ def draw(gs, player, n=1):
     return drawn
 
 
-def deploy_from_hand(gs, player, hand_idx):
-    # Enforce deploy cost
-    if 0 <= hand_idx < len(player.hand):
-        card = player.hand[hand_idx]
-        # dc = getattr(card, "deploy_cost", None)  # Unused variable removed
-        wind = getattr(card, "deploy_wind", 0)
-        gear = getattr(card, "deploy_gear", 0)
-        meat = getattr(card, "deploy_meat", 0)
-        # Wind must be distributed via distribute_wind
-        if wind > 0:
-            if not distribute_wind(gs, player, card, wind):
-                return False
-        # Gear and Meat must be burned from Dead Pool
-        if gear > 0:
-            if not burn_dead_pool(gs, player, "mechanical", gear):
-                return False
-        if meat > 0:
-            if not burn_dead_pool(gs, player, "biological", meat):
-                return False
-        player.board.append(card)
-        player.hand.pop(hand_idx)
-        return True
-    return False
+def deploy_from_hand(gs: "GameState", player: "Player", hand_idx: int) -> bool:
+    # basic bounds check
+    if hand_idx < 0 or hand_idx >= len(player.hand):
+        print("invalid hand index")
+        return False
+
+    card = player.hand[hand_idx]
+
+    # figure out costs (defaulting to 0 if fields are missing)
+    wind_cost = getattr(card, "deploy_wind", 0)
+    gear_cost = getattr(card, "deploy_gear", 0)
+    meat_cost = getattr(card, "deploy_meat", 0)
+
+    # pay wind by distributing across friendly goons
+    if wind_cost > 0:
+        ok = distribute_wind(player, total_cost=wind_cost, auto=True)
+        if not ok:
+            print("could not pay wind")
+            return False
+
+    # TODO (later): pay gear/meat from the shared dead pool.
+    # For now, if you haven't implemented that, assert they are zero:
+    if gear_cost or meat_cost:
+        print("gear/meat payment not implemented yet")
+        return False
+
+    # move the card
+    player.hand.pop(hand_idx)
+    player.board.append(card)
+    # mark freshness so it can't immediately pay wind (if that's your rule)
+    card.new_this_turn = True
+
+    return True
 
 
 def end_of_turn(gs):
@@ -324,6 +328,8 @@ def find_squad_leader(cards: List[Card]) -> Optional[Card]:
 
 
 # --- Model Classes ---
+
+
 @dataclass
 class Player:
     name: str
@@ -338,19 +344,23 @@ class Player:
 
 @dataclass
 class Card:
+    # ---- NON-DEFAULTS FIRST (no '=') ----
     name: str
     rank: "Rank"
-    faction: str
-    traits: set[str] = field(default_factory=set)
-    abilities: List["Ability"] = field(default_factory=list)
+    faction: Optional[str] = None
+
+    # ---- DEFAULTED FIELDS AFTER ----
+    abilities: List[Ability] = field(default_factory=list)
+    traits: Set[str] = field(default_factory=set)
+    statuses: Dict[str, Status] = field(default_factory=dict)
+
+    wind: int = 0
     deploy_wind: int = 0
     deploy_gear: int = 0
     deploy_meat: int = 0
-    wind: int = 0
-    stars: int = 0
-    image_url_mini: str = ""
-    image_url_full: str = ""
-    statuses: Dict[str, Any] = field(default_factory=dict)
+
+    # used by wind-payment planner to skip fresh entries
+    new_this_turn: bool = False
 
 
 # --- Helper for burning gear/meat from dead pool ---
@@ -666,60 +676,73 @@ def destroy_if_needed(owner: Player, c: Card) -> None:
             raise SystemExit(0)
 
 
-def _apply_wind_safely(targets: List[Card], total: int) -> int:
+def _apply_wind_safely(targets: List["Card"], total_cost: int) -> int:
+    """
+    Greedily applies wind to the least-wind goons first, skipping 'new_this_turn' if present.
+    Returns how much wind was actually applied.
+    """
+    pool = sorted(
+        [c for c in targets if not getattr(c, "new_this_turn", False)],
+        key=lambda c: (getattr(c, "wind", 0), getattr(c, "name", "")),
+    )
+
     paid = 0
-    pool = sorted([c for c in targets if not c.new_this_turn], key=lambda c: (c.wind, c.name))
-    while paid < total and pool:
-        pool.sort(key=lambda c: (c.wind, c.name))
-        c = next((x for x in pool if x.wind < 3), None)
-        if c is None:
+    for c in pool:
+        if paid >= total_cost:
             break
-        c.wind += 1
+        c.wind = getattr(c, "wind", 0) + 1
         paid += 1
+
     return paid
 
 
-# --- Flake8/black-clean distribute_wind ---
 def distribute_wind(
     owner: "Player",
-    total: int,
+    total_cost: int,
     *,
     auto: bool = False,
     allow_cancel: bool = False,
 ) -> Optional[bool]:
     """
-    Pay 'total' wind by incrementing wind on the owner's board goons.
+    Distribute 'total_cost' wind across the owner's board.
     Returns:
-        True  -> fully paid
-        False -> could not pay
-        None  -> user canceled (only if allow_cancel=True and you implement a prompt)
+      True  -> fully paid
+      False -> could not pay
+      None  -> (reserved if you later support user-cancel when allow_cancel=True)
     """
-    if total <= 0:
+    if total_cost <= 0:
         return True
-    if not owner.board:
+
+    if not getattr(owner, "board", None):
         print("No goons in play to pay wind.")
         return False
 
-    before = {id(c): (c, c.wind) for c in owner.board}
-
+    # AUTO: greedy safe allocation among existing goons
     if auto:
-        paid = _apply_wind_safely(owner.board, total)
-        for _, (card, w0) in before.items():
-            if card.wind > w0:
-                for step in range(w0 + 1, card.wind + 1):
-                    print(f"{owner.name} pays 1 wind with {card.name} (now {step})")
+        paid = _apply_wind_safely(owner.board, total_cost)
+        # If you have a threshold destroy rule elsewhere, you can call it here per card.
+        # Example (only if you already define destroy_if_needed):
         for c in list(owner.board):
-            destroy_if_needed(owner, c)
-        return paid >= total
+            try:
+                destroy_if_needed(owner, c)  # type: ignore[name-defined]
+            except NameError:
+                pass
 
-    paid = _apply_wind_safely(owner.board, total)
-    for _, (card, w0) in before.items():
-        if card.wind > w0:
-            for step in range(w0 + 1, card.wind + 1):
-                print(f"{owner.name} pays 1 wind with {card.name} (now {step})")
+        return True if paid >= total_cost else False
+
+    # MANUAL PATH (not implemented yet)
+    if allow_cancel:
+        # In the future, prompt the user and return None if they cancel.
+        pass
+
+    # Fallback: treat manual as auto for now
+    paid = _apply_wind_safely(owner.board, total_cost)
     for c in list(owner.board):
-        destroy_if_needed(owner, c)
-    return paid >= total
+        try:
+            destroy_if_needed(owner, c)  # type: ignore[name-defined]
+        except NameError:
+            pass
+    return True if paid >= total_cost else False
 
 
 def apply_wind_with_resist(
