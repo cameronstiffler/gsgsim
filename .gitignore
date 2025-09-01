@@ -21,3 +21,9 @@ refactor_task_card.md
 shield_array_node.json
 example_card.json
 game_log.txt
+.venv/
+__pycache__/
+*.pyc
+.cache/
+**/.venv/
+**/__pycache__/
