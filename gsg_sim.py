@@ -1,19 +1,61 @@
+# === IMPORT SENTRY ===
+# Do not move or duplicate imports. Keep this block exactly as-is at the top.
+# Only add new imports inside this block if strictly necessary.
+# This ensures stable module resolution and prevents Copilot/other tools
+# from relocating or duplicating imports across the file.
 from __future__ import annotations
-from typing import Callable
+
+# Standard library imports
 import argparse
 import json
 import os
 import random
 import re
 import sys
-from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Deque, Dict, List, Optional, TextIO, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple  # Third-party imports
+
 from rich.console import Console
 from rich.table import Table
 
+# === END IMPORT SENTRY ===
 
+
+_WORD_NUMS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+}
+
+
+def _infer_wind_from_text(text: str) -> int:
+    if not text:
+        return 0
+    m = re.search(r"(\d+)\s*wind", text, flags=re.I)
+    if m:
+        return int(m.group(1))
+    word_nums_pattern = "\\b(" + "|".join(_WORD_NUMS.keys()) + ")\\b\\s*wind"
+    m = re.search(word_nums_pattern, text, flags=re.I)
+    if m:
+        return _WORD_NUMS[m.group(1).lower()]
+    return 0
+
+
+# --- Globals for game log ---
+_GLOG = None
+GAMELOG_PATH = None
+_LOG = None
+
+
+# --- UI Classes ---
 class TerminalUI:
     def render(self, gs):
         print("\033[2J\033[H", end="")
@@ -23,9 +65,8 @@ class TerminalUI:
             abil = ", ".join(f"{j}:{a.name}" for j, a in enumerate(getattr(c, "abilities", [])))
             rank = getattr(c, "rank", "?")
             wind = getattr(c, "wind", 0)
-            # Shorten line to <=100 chars
-            # Shorten line to <=100 chars
-            return f"[{i:>2}] {c.name:<20} {rank} | wind={wind} | {abil}"[:100]
+            rank_str = rank.name if hasattr(rank, "name") else str(rank)
+            return f"[{i:>2}] {c.name:<20} {rank_str} | wind={wind} | {abil}"[:100]
 
         print(f"Board P1 ({p1.name})")
         for i, c in enumerate(p1.board):
@@ -38,10 +79,10 @@ class TerminalUI:
         for i, c in enumerate(human.hand):
             name = c.name
             rank = getattr(c, "rank", "?")
-            line = f"  {i:>2}: {name} [{rank}]"
-            # Truncate to 100 chars, but preserve info
+            rank_str = rank.name if hasattr(rank, "name") else str(rank)
+            line = f"  {i:>2}: {name} [{rank_str}]"
             if len(line) > 100:
-                print(f"{i:>2}: {name[:60]}... [{rank}]")
+                print(f"{i:>2}: {name[:60]}... [{rank_str}]")
             else:
                 print(line)
 
@@ -82,17 +123,6 @@ class TerminalUI:
                 if len(rest) < 2:
                     print("usage: use <src_idx> <abil_idx> [tgt_idx]")
                     continue
-                try:
-                    s = int(rest[0])
-                    a = int(rest[1])
-                    t = int(rest[2]) if len(rest) > 2 else None
-                except ValueError:
-                    print("indices must be ints")
-                    continue
-                ok = use_ability_cli(gs, gs.turn_player, s, a, t)
-                if not ok:
-                    print("ability failed")
-                continue
             print("unknown cmd; type help")
 
 
@@ -103,88 +133,64 @@ class RichUI(TerminalUI):
         self.console = Console()
 
     def render(self, gs):
-        self.console.clear()
+        # Avoid clearing the screen to prevent blank frames
+        # self.console.clear()
 
         def board_table(title, p):
-            t = Table(title=title, expand=True, pad_edge=False, show_edge=True)
-            t.add_column("#", justify="right")
-            t.add_column("Name")
-            t.add_column("Rank")
-            t.add_column("Wind", justify="right")
+            t = Table(
+                title=title,
+                expand=False,  # keep width tight so it doesn't flood the screen
+                pad_edge=False,  # no outer padding
+                padding=(0, 1),  # minimal cell padding (rows, cols)
+                show_edge=True,
+            )
+            t.add_column("#", justify="right", no_wrap=True)
+            t.add_column("Name", no_wrap=True)
+            t.add_column("Rank", no_wrap=True)
+            t.add_column("Wind", justify="right", no_wrap=True)
             t.add_column("Abilities")
+
             for i, c in enumerate(p.board):
                 abil = (
                     ", ".join(f"{j}:{a.name}" for j, a in enumerate(getattr(c, "abilities", [])))
                     or "-"
                 )
-                t.add_row(
-                    str(i), c.name, str(getattr(c, "rank", "?")), str(getattr(c, "wind", 0)), abil
+                # render rank cleanly
+                rank = getattr(c, "rank", None)
+                rank_str = (
+                    rank.name if hasattr(rank, "name") else (str(rank) if rank is not None else "?")
                 )
+                t.add_row(str(i), c.name, rank_str, str(getattr(c, "wind", 0)), abil)
             return t
 
-        self.console.print(board_table(f"Board P1: {gs.p1.name}", gs.p1))
-        self.console.print(board_table(f"Board P2: {gs.p2.name}", gs.p2))
+        # Always print a quick text summary first (debug/visibility)
+        p1, p2 = gs.p1, gs.p2
+        self.console.print(
+            f"[bold]P1 {p1.name}[/bold]: board={len(p1.board)} hand={len(p1.hand)}"
+            f"    |    "
+            f"[bold]P2 {p2.name}[/bold]: board={len(p2.board)} hand={len(p2.hand)}"
+        )
+        self.console.print(board_table(f"Board P1: {p1.name}", p1))
+        self.console.print(board_table(f"Board P2: {p2.name}", p2))
+
+        # Hand of current player under their board
         h = Table(
             title=f"{gs.turn_player.name} hand ({len(gs.turn_player.hand)})",
-            expand=True,
+            expand=False,
             pad_edge=False,
+            padding=(0, 1),
             show_edge=True,
         )
-        h.add_column("#", justify="right")
-        h.add_column("Name")
-        h.add_column("Rank")
+        h.add_column("#", justify="right", no_wrap=True)
+        h.add_column("Name", no_wrap=True)
+        h.add_column("Rank", no_wrap=True)
         for i, c in enumerate(gs.turn_player.hand):
-            h.add_row(str(i), c.name, str(getattr(c, "rank", "?")))
+            rank = getattr(c, "rank", None)
+            rank_str = (
+                rank.name if hasattr(rank, "name") else (str(rank) if rank is not None else "?")
+            )
+            h.add_row(str(i), c.name, rank_str)
         self.console.print(h)
-
-    def run_loop(self, gs):
-        self.console.print("Type 'help' for commands. 'quit' to exit.")
-        while True:
-            self.render(gs)
-            line = self.console.input("> ").strip()
-            if not line:
-                continue
-            cmd, *rest = line.lower().split()
-            if cmd in {"quit", "q", "exit"}:
-                break
-            if cmd in {"help", "?"}:
-                self.console.print(
-                    "commands: help | quit(q) | end(e) | deploy(d) <hand_idx> | use(u) <src_idx> "
-                    "<abil_idx> [tgt_idx]"
-                )
-                continue
-            if cmd in {"end", "e"}:
-                end_of_turn(gs)
-                continue
-            if cmd in {"deploy", "d"}:
-                if not rest:
-                    self.console.print("usage: deploy <hand_idx>")
-                    continue
-                try:
-                    i = int(rest[0])
-                except ValueError:
-                    self.console.print("hand_idx must be int")
-                    continue
-                ok = deploy_from_hand(gs, gs.turn_player, i)
-                if not ok:
-                    self.console.print("deploy failed")
-                continue
-            if cmd in {"use", "u"}:
-                if len(rest) < 2:
-                    self.console.print("usage: use <src_idx> <abil_idx> [tgt_idx]")
-                    continue
-                try:
-                    s = int(rest[0])
-                    a = int(rest[1])
-                    t = int(rest[2]) if len(rest) > 2 else None
-                except ValueError:
-                    self.console.print("indices must be ints")
-                    continue
-                ok = use_ability_cli(gs, gs.turn_player, s, a, t)
-                if not ok:
-                    self.console.print("ability failed")
-                continue
-            self.console.print("unknown cmd; type help")
 
 
 @dataclass
@@ -206,6 +212,9 @@ class Rank(Enum):
     TITAN = auto()
     TN = TITAN  # alias
 
+    def __str__(self):
+        return self.name
+
 
 @dataclass
 class Ability:
@@ -216,13 +225,124 @@ class Ability:
     idx: int = 0
 
 
+# --- GameState dataclass ---
+@dataclass
+class GameState:
+    p1: "Player"
+    p2: "Player"
+    turn_player: "Player"
+    phase: str = "start"
+    turn_number: int = 1
+
+
+# --- shuffle_deck helper ---
+def shuffle_deck(gs: GameState, player: "Player"):
+    random.shuffle(player.deck)
+
+
+def _opponent_of(gs: "GameState", p: "Player") -> "Player":
+    return gs.p2 if p is gs.p1 else gs.p1
+
+
+def start_of_turn(gs: "GameState") -> None:
+    """Start-of-turn upkeep for the active player.
+    - Draw 1 card.
+    - Reset per-turn ability usage counters on their board.
+    - Expire simple start-of-turn statuses if you track them.
+    - Set phase to 'main'.
+    """
+
+
+# --- Engine stubs for UI integration ---
+def draw(gs, player, n=1):
+    """Draw up to n cards from player's deck into hand. Returns actual drawn count."""
+    drawn = 0
+    for _ in range(max(0, int(n))):
+        if not player.deck:
+            break
+        player.hand.append(player.deck.pop())
+        drawn += 1
+    return drawn
+
+
+def deploy_from_hand(gs, player, hand_idx):
+    # Enforce deploy cost
+    if 0 <= hand_idx < len(player.hand):
+        card = player.hand[hand_idx]
+        # dc = getattr(card, "deploy_cost", None)  # Unused variable removed
+        wind = getattr(card, "deploy_wind", 0)
+        gear = getattr(card, "deploy_gear", 0)
+        meat = getattr(card, "deploy_meat", 0)
+        # Wind must be distributed via distribute_wind
+        if wind > 0:
+            if not distribute_wind(gs, player, card, wind):
+                return False
+        # Gear and Meat must be burned from Dead Pool
+        if gear > 0:
+            if not burn_dead_pool(gs, player, "mechanical", gear):
+                return False
+        if meat > 0:
+            if not burn_dead_pool(gs, player, "biological", meat):
+                return False
+        player.board.append(card)
+        player.hand.pop(hand_idx)
+        return True
+    return False
+
+
+def end_of_turn(gs):
+    # Minimal stub: rotate turn player and increment turn number
+    gs.turn_number += 1
+    gs.turn_player = gs.p2 if gs.turn_player is gs.p1 else gs.p1
+    gs.phase = "start"
+    draw(gs, gs.turn_player, 1)
+
+
+# --- Engine stubs for UI integration ---
+
+
+def _is_sl_rank(val) -> bool:
+    if isinstance(val, Rank):
+        return val == Rank.SL
+    if isinstance(val, str):
+        return val.strip().lower() in {"sl", "squad leader", "squadleader", "leader"}
+    return False
+
+
+def find_squad_leader(cards: List[Card]) -> Optional[Card]:
+    for c in cards:
+        if _is_sl_rank(getattr(c, "rank", None)):
+            if not isinstance(c.rank, Rank):
+                c.rank = Rank.SL
+            return c
+    for c in cards:
+        nm = (getattr(c, "name", "") or "").lower()
+        if nm in {"lokar simmons", "grim"} or "leader" in nm:
+            c.rank = Rank.SL
+            return c
+    return None
+
+
+# --- Model Classes ---
+@dataclass
+class Player:
+    name: str
+    board: List["Card"] = field(default_factory=list)
+    hand: List["Card"] = field(default_factory=list)
+    deck: List["Card"] = field(default_factory=list)
+    retired: List["Card"] = field(default_factory=list)
+    gear: int = 0
+    meat: int = 0
+    power: int = 0
+
+
 @dataclass
 class Card:
     name: str
-    rank: Rank
+    rank: "Rank"
     faction: str
     traits: set[str] = field(default_factory=set)
-    abilities: List[Ability] = field(default_factory=list)
+    abilities: List["Ability"] = field(default_factory=list)
     deploy_wind: int = 0
     deploy_gear: int = 0
     deploy_meat: int = 0
@@ -233,16 +353,11 @@ class Card:
     statuses: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class Player:
-    name: str
-    board: List[Card] = field(default_factory=list)
-    hand: List[Card] = field(default_factory=list)
-    deck: List[Card] = field(default_factory=list)
-    retired: List[Card] = field(default_factory=list)
-    gear: int = 0
-    meat: int = 0
-    power: int = 0
+# --- Helper for burning gear/meat from dead pool ---
+def burn_dead_pool(gs, player, type_, amount):
+    # Dummy implementation: always succeed for now
+    # TODO: Implement actual logic for burning from shared dead pool
+    return True
 
 
 # ============================== Utilities: deck & turn ==============================
@@ -290,156 +405,6 @@ def _select_ui(kind: str):
     if kind == "rich" and Console is not None:
         return RichUI()
     return TerminalUI()
-
-
-# --- GameState dataclass ---
-@dataclass
-class GameState:
-    p1: "Player"
-    p2: "Player"
-    turn_player: "Player"
-    phase: str = "start"
-    turn_number: int = 1
-
-
-# --- shuffle_deck helper ---
-def shuffle_deck(gs: GameState, player: "Player"):
-    random.shuffle(player.deck)
-
-
-def _opponent_of(gs: "GameState", p: "Player") -> "Player":
-    return gs.p2 if p is gs.p1 else gs.p1
-
-
-def start_of_turn(gs: "GameState") -> None:
-    """Start-of-turn upkeep for the active player.
-    - Draw 1 card.
-    - Reset per-turn ability usage counters on their board.
-    - Expire simple start-of-turn statuses if you track them.
-    - Set phase to 'main'.
-    """
-
-
-# --- Engine stubs for UI integration ---
-def draw(gs, player, n=1):
-    """Draw up to n cards from player's deck into hand. Returns actual drawn count."""
-    drawn = 0
-    for _ in range(max(0, int(n))):
-        if not player.deck:
-            break
-        player.hand.append(player.deck.pop())
-        drawn += 1
-    return drawn
-
-
-def deploy_from_hand(gs, player, hand_idx):
-    # Minimal stub: move card from hand to board if index valid
-    if 0 <= hand_idx < len(player.hand):
-        card = player.hand.pop(hand_idx)
-        player.board.append(card)
-        return True
-    return False
-
-
-def use_ability_cli(gs, player, src_idx, abil_idx, tgt_idx=None):
-    # Minimal stub: print action and return True
-    print(f"{player.name} uses ability {abil_idx} of card {src_idx} targeting {tgt_idx}")
-    return True
-
-
-def end_of_turn(gs):
-    # Minimal stub: rotate turn player and increment turn number
-    gs.turn_number += 1
-    gs.turn_player = gs.p2 if gs.turn_player is gs.p1 else gs.p1
-    gs.phase = "start"
-    draw(gs, gs.turn_player, 1)
-
-
-# --- Engine stubs for UI integration ---
-
-
-def _is_sl_rank(val) -> bool:
-    if isinstance(val, Rank):
-        return val == Rank.SL
-    if isinstance(val, str):
-        return val.strip().lower() in {"sl", "squad leader", "squadleader", "leader"}
-    return False
-
-
-def find_squad_leader(cards: List[Card]) -> Optional[Card]:
-    for c in cards:
-        if _is_sl_rank(getattr(c, "rank", None)):
-            if not isinstance(c.rank, Rank):
-                c.rank = Rank.SL
-            return c
-    for c in cards:
-        nm = (getattr(c, "name", "") or "").lower()
-        if nm in {"lokar simmons", "grim"} or "leader" in nm:
-            c.rank = Rank.SL
-            return c
-    return None
-
-
-# ============================== Globals & IO ==============================
-
-
-@dataclass
-class _CommandSource:
-    queue: Deque[str] = field(default_factory=deque)
-    default_on_interrupt: Optional[str] = None
-
-
-_CMD_SOURCE: Optional[_CommandSource] = None
-console = None  # Removed rich Console; use print instead
-_LOG: Optional[TextIO] = None  # debug transcript if --log is provided
-
-AI_NARC: bool = False
-AI_PCU: bool = False
-
-# Structured game log (persists to file)
-GAME_LOG: List[str] = []
-TURN_BUFFER: List[str] = []
-LAST_TURN_SUMMARY: Optional[Dict[str, object]] = None
-_GLOG: Optional[TextIO] = None
-GAMELOG_PATH: Optional[str] = None
-
-HELP_TEXT = """\
-Commands:
-  deploy HAND_IDX                - deploy card from hand index
-  use SRC_IDX ABIL_IDX [TGT_IDX] - use ability
-  end                            - end turn
-  quit                           - exit
-  help                           - show this help
-"""
-
-
-# ============================== Deck I/O ==============================
-
-_WORD_NUMS = {
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-    "nine": 9,
-    "ten": 10,
-}
-
-
-def _infer_wind_from_text(text: str) -> int:
-    if not text:
-        return 0
-    m = re.search(r"(\d+)\s*wind", text, flags=re.I)
-    if m:
-        return int(m.group(1))
-    word_nums_pattern = "\\b(" + "|".join(_WORD_NUMS.keys()) + ")\\b\\s*wind"
-    m = re.search(word_nums_pattern, text, flags=re.I)
-    if m:
-        return _WORD_NUMS[m.group(1).lower()]
-    return 0
 
 
 def _infer_remove_from_text(text: str) -> int:
@@ -616,7 +581,7 @@ def conflicts_with_unique(g: GameState, c: Card) -> bool:
         return False
     key = (c.name or "").strip().lower()
     for side in (g.narc_player, g.pcu_player):
-        for x in side.field:
+        for x in side.board:
             if is_unique(x) and (x.name or "").strip().lower() == key:
                 return True
     return False
@@ -637,7 +602,7 @@ def _pull_named_starter(
 # ---------- NEW: Leader Protection Helpers ----------
 def _has_leader_protectors(owner: Player) -> bool:
     """True if owner controls any non-leader, non-titan goon (guards the leader)."""
-    return any((not is_squad_leader(c)) and (not c.is_titan) for c in owner.field)
+    return any((not is_squad_leader(c)) and (not c.is_titan) for c in owner.board)
 
 
 def _is_leader_protected(owner: Player, target: Card) -> bool:
@@ -651,9 +616,9 @@ def _is_leader_protected(owner: Player, target: Card) -> bool:
 def destroy_if_needed(owner: Player, c: Card) -> None:
     # If Vex is destroyed, also destroy Nives
     if (c.name or "").strip().lower() == "vex":
-        for goon in list(owner.field):
+        for goon in list(owner.board):
             if (goon.name or "").strip().lower() == "nives":
-                owner.field.remove(goon)
+                owner.board.remove(goon)
                 owner.dead_pool.append(goon)
                 print("Nives destroyed because Vex was destroyed.")
                 print(f"[destroy] {owner.name}:Nives (linked to Vex)")
@@ -661,15 +626,15 @@ def destroy_if_needed(owner: Player, c: Card) -> None:
     if c.wind >= 4:
         # If Krax is destroyed, also destroy Dragoon
         if (c.name or "").strip().lower() == "krax":
-            for goon in list(owner.field):
+            for goon in list(owner.board):
                 if (goon.name or "").strip().lower() == "dragoon":
-                    owner.field.remove(goon)
+                    owner.board.remove(goon)
                     owner.dead_pool.append(goon)
                     print("Dragoon destroyed because Krax was destroyed.")
                     print(f"[destroy] {owner.name}:Dragoon (linked to Krax)")
                     print(f"{owner.name}'s Dragoon destroyed (linked to Krax)")
-        if c in owner.field:
-            owner.field.remove(c)
+        if c in owner.board:
+            owner.board.remove(c)
         # Meatjacker returns to owner's hand when destroyed
         if (c.name or "").strip().lower() == "meatjacker":
             owner.hand.append(c)
@@ -811,7 +776,7 @@ class EffectStack:
             args = eff.args or {}
             g: GameState = ctx["game"]
             src_owner: Player = ctx["player"]
-            enemy = g.p2 if src_owner is g.p1 else g.p2
+            enemy = g.p2 if src_owner is g.p1 else g.p1
             target = ctx.get("target")
             pending = ctx["pending_destroy"]
             if op == "add_wind" and target is not None:
@@ -1141,14 +1106,20 @@ def main():
     first = args.first if args.first != "random" else rng.choice(["p1", "p2"])
     gs.turn_player = p1 if first == "p1" else p2
     gs.turn_number = 1
-    start_of_turn(gs)  # current player draws 1 at start
+
+    # Only draw for active player at start of turn
+    start_of_turn(gs)
 
     ui = _select_ui("rich" if args.ui == "rich" else "cli")
     if hasattr(ui, "configure_runtime"):
         ui.configure_runtime(ai=args.ai)
 
     print("GSG engine ready. Decks loaded. SLs on board. (Type 'help' to see commands.)")
-    ui.run_loop(gs)
+    try:
+        ui.run_loop(gs)
+    except (KeyboardInterrupt, EOFError):
+        print("\nExiting game.")
+        return
 
 
 if __name__ == "__main__":
