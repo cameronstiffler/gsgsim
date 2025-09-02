@@ -10,7 +10,7 @@ RED = "\033[31m"
 YELLOW = "\033[33m"
 RST = "\033[0m"
 
-# Ensure engine hooks are loaded
+# Try to activate flag shim (✨ for freshly drawn/deployed)
 try:
     from .. import engine_flagshim  # noqa: F401
 except Exception:
@@ -24,18 +24,24 @@ def rank_icon(card: Card) -> str:
     return ""
 
 def prop_icons(card: Card) -> str:
-    icons = []
+    props = getattr(card, "properties", {}) or {}
     statuses = getattr(card, "statuses", {}) or {}
-    if (isinstance(statuses, dict) and ("resist" in statuses)) or bool(getattr(card, "resist", False)):
-        icons.append(" ✋")
-    if (isinstance(statuses, dict) and ("no_unwind" in statuses)) or bool(getattr(card, "no_unwind", False)):
-        icons.append(" 🚫")
-    return "".join(icons)
+    resist = props.get("resist")
+    if resist is None:
+        resist = bool(getattr(card, "resist", False)) or ("resist" in statuses)
+    no_unwind = props.get("no_unwind")
+    if no_unwind is None:
+        no_unwind = bool(getattr(card, "no_unwind", False)) or ("no_unwind" in statuses)
+    out = []
+    if resist: out.append(" ✋")
+    if no_unwind: out.append(" 🚫")
+    return "".join(out)
 
 def cost_str(card: Card) -> str:
     w = int(getattr(card, "deploy_wind", 0) or 0)
     g = int(getattr(card, "deploy_gear", 0) or 0)
     m = int(getattr(card, "deploy_meat", 0) or 0)
+    # white numbers; colored icons
     return f"{WHITE}{w}{RST}{CYAN}⟲{RST} {WHITE}{g}{RST}{GREY}⛭{RST} {WHITE}{m}{RST}{RED}⚈{RST}"
 
 def name_with_icons(card: Card) -> str:
@@ -106,7 +112,7 @@ class TerminalUI:
                     print("\nBye."); break
                 if not line: continue
 
-                # --- Shorthand ---
+                # Shorthand: dN = manual, ddN = auto (also spaced forms)
                 m = re.fullmatch(r"d(\d+)", line.lower())
                 if m:
                     idx = int(m.group(1))
@@ -121,16 +127,11 @@ class TerminalUI:
                     continue
                 parts = line.lower().split()
                 if len(parts) == 2 and parts[0] == "dd" and parts[1].isdigit():
-                    idx = int(parts[1])
-                    ok = deploy_from_hand(gs, gs.turn_player, idx)
-                    if not ok: print("deploy failed")
-                    continue
+                    idx = int(parts[1]); ok = deploy_from_hand(gs, gs.turn_player, idx)
+                    if not ok: print("deploy failed"); continue
                 if len(parts) == 2 and parts[0] == "d" and parts[1].isdigit():
-                    idx = int(parts[1])
-                    ok = deploy_from_hand(gs, gs.turn_player, idx, chooser=self._chooser(gs))
-                    if not ok: print("deploy failed (manual)")
-                    continue
-                # ---------------
+                    idx = int(parts[1]); ok = deploy_from_hand(gs, gs.turn_player, idx, chooser=self._chooser(gs))
+                    if not ok: print("deploy failed (manual)"); continue
 
                 cmd, *rest = parts
                 if cmd in {"quit", "q", "exit"}: break

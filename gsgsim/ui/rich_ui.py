@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 from typing import List, Tuple, Optional
 from rich.console import Console
 from rich.table import Table
@@ -6,7 +7,7 @@ from rich.text import Text
 from rich.style import Style
 from ..models import GameState, Card, Rank
 
-# Ensure engine hooks are loaded (monkeypatch draw/end_of_turn to manage flags)
+# Try to activate flag shim (✨ for freshly drawn/deployed)
 try:
     from .. import engine_flagshim  # noqa: F401
 except Exception:
@@ -20,19 +21,26 @@ def rank_icon(card: Card) -> str:
     return ""
 
 def prop_icons(card: Card) -> str:
-    icons = []
+    # Prefer properties; gracefully fall back to attrs/statuses so no JSON edit is required
+    props = getattr(card, "properties", {}) or {}
     statuses = getattr(card, "statuses", {}) or {}
-    if (isinstance(statuses, dict) and ("resist" in statuses)) or bool(getattr(card, "resist", False)):
-        icons.append(" ✋")
-    if (isinstance(statuses, dict) and ("no_unwind" in statuses)) or bool(getattr(card, "no_unwind", False)):
-        icons.append(" 🚫")
-    return "".join(icons)
+    resist = props.get("resist")
+    if resist is None:
+        resist = bool(getattr(card, "resist", False)) or ("resist" in statuses)
+    no_unwind = props.get("no_unwind")
+    if no_unwind is None:
+        no_unwind = bool(getattr(card, "no_unwind", False)) or ("no_unwind" in statuses)
+    out = []
+    if resist: out.append(" ✋")
+    if no_unwind: out.append(" 🚫")
+    return "".join(out)
 
 def cost_text(card: Card) -> Text:
     w = int(getattr(card, "deploy_wind", 0) or 0)
     g = int(getattr(card, "deploy_gear", 0) or 0)
     m = int(getattr(card, "deploy_meat", 0) or 0)
     t = Text()
+    # white numbers; colored icons
     t.append(str(w), style="white"); t.append("⟲", style="cyan"); t.append(" ")
     t.append(str(g), style="white"); t.append("⛭", style="bright_black"); t.append(" ")
     t.append(str(m), style="white"); t.append("⚈", style="red")
@@ -40,10 +48,11 @@ def cost_text(card: Card) -> Text:
 
 def name_with_icons(card: Card) -> Text:
     t = Text(card.name)
-    r = rank_icon(card); p = prop_icons(card)
-    if r: t.append(r)
-    if p: t.append(p)
-    # ✨ for freshly deployed (new_this_turn) or freshly drawn (new_in_hand)
+    # rank + properties
+    for piece in (rank_icon(card), prop_icons(card)):
+        if piece:
+            t.append(piece)
+    # ✨ for freshly deployed or freshly drawn
     if getattr(card, "new_this_turn", False) or getattr(card, "new_in_hand", False):
         t.append(" ✨", style=Style(color="yellow"))
     return t
@@ -83,8 +92,6 @@ class RichUI:
         self.console.print(h)
 
     def _chooser(self, gs: GameState):
-        from typing import List, Tuple, Optional
-        from rich.table import Table
         def chooser(eligible: List[Tuple[int, object, int]], total_cost: int) -> Optional[List[Tuple[int, int]]]:
             table = Table(title=f"Choose payers (cost {total_cost})", expand=False)
             table.add_column("Idx", justify="right"); table.add_column("Name"); table.add_column("Wind"); table.add_column("Cap")
@@ -99,7 +106,7 @@ class RichUI:
             if not line: return None
             plan: List[Tuple[int, int]] = []
             try:
-                parts = [p.strip() for p in line.split(',') if p.strip()] 
+                parts = [p.strip() for p in line.split(',') if p.strip()]
                 for tok in parts:
                     if ':' in tok:
                         i_s, a_s = tok.split(':', 1); idx = int(i_s); amt = int(a_s)
@@ -112,7 +119,6 @@ class RichUI:
         return chooser
 
     def run_loop(self, gs: GameState):
-        import re
         from ..engine import deploy_from_hand, end_of_turn, use_ability_cli
         self.console.print("[bold]Type 'help' for commands. 'quit' to exit.[/bold]")
         try:
@@ -124,7 +130,7 @@ class RichUI:
                     self.console.print("\nExiting game."); break
                 if not line: continue
 
-                # --- Shorthand ---
+                # Shorthand: dN = manual, ddN = auto (also spaced forms)
                 m = re.fullmatch(r"d(\d+)", line.lower())
                 if m:
                     idx = int(m.group(1))
@@ -139,16 +145,11 @@ class RichUI:
                     continue
                 parts = line.lower().split()
                 if len(parts) == 2 and parts[0] == "dd" and parts[1].isdigit():
-                    idx = int(parts[1])
-                    ok = deploy_from_hand(gs, gs.turn_player, idx)
-                    if not ok: self.console.print("[red]deploy failed[/red]")
-                    continue
+                    idx = int(parts[1]); ok = deploy_from_hand(gs, gs.turn_player, idx)
+                    if not ok: self.console.print("[red]deploy failed[/red]"); continue
                 if len(parts) == 2 and parts[0] == "d" and parts[1].isdigit():
-                    idx = int(parts[1])
-                    ok = deploy_from_hand(gs, gs.turn_player, idx, chooser=self._chooser(gs))
-                    if not ok: self.console.print("[red]deploy failed (manual)[/red]")
-                    continue
-                # ---------------
+                    idx = int(parts[1]); ok = deploy_from_hand(gs, gs.turn_player, idx, chooser=self._chooser(gs))
+                    if not ok: self.console.print("[red]deploy failed (manual)[/red]"); continue
 
                 cmd, *rest = parts
                 if cmd in {"quit", "q", "exit"}: break
