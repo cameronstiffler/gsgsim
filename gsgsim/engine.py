@@ -25,7 +25,7 @@ def deploy_from_hand(gs: GameState, player: Player, hand_idx: int, chooser: Opti
 
     # Pay wind
     if not distribute_wind(player, wind_cost, chooser=chooser):
-        # payments module prints an error line already
+        print("refused: paying wind would require lethal SL payment or no eligible payers")
         return False
 
     # Move card to board
