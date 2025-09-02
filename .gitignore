@@ -51,3 +51,7 @@ end
 __pycache__/
 *.patch
 *.zip
+.venv/
+__pycache__/
+*.patch
+*.zip
