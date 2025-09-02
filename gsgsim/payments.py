@@ -9,41 +9,33 @@ def _eligible_pool(cards: List[Card]) -> List[Card]:
 
 def _simulate_payment(pool: List[Card], total_cost: int) -> Tuple[bool, List[Tuple[Card, int]]]:
     """
-    Try to cover total_cost by distributing wind across pool without exceeding
-    4 total wind on any single goon. Hitting exactly 4 is allowed (will KO on commit).
+    Distribute wind without exceeding 4 total wind on any single goon.
+    Hitting exactly 4 is allowed (KO handled on commit).
     Returns (ok, deltas) where deltas = [(card, +wind), ...].
     """
     if total_cost <= 0:
         return True, []
 
-    # Sort by current wind then name for stable, “even” distribution
+    # Stable order: lowest wind first
     pool = sorted(pool, key=lambda c: (getattr(c, "wind", 0), getattr(c, "name", "")))
 
-    # Calculate per-goon capacity to contribute this transaction
-    # Capacity = max extra wind until KO threshold (4 - current)
-    capacities = {c: max(0, 4 - getattr(c, "wind", 0)) for c in pool}
-    total_capacity = sum(capacities.values())
-    if total_capacity < total_cost:
-        # Not enough legal wind to pay; fail with no side effects
+    # Parallel array of capacities (max we can add before hitting 4)
+    capacities = [max(0, 4 - getattr(c, "wind", 0)) for c in pool]
+    if sum(capacities) < total_cost:
         return False, []
 
-    remaining = total_cost
     deltas: List[Tuple[Card, int]] = []
-
-    # Round-robin add 1 wind while respecting capacities
+    remaining = total_cost
     i = 0
-    cir = list(pool)
-    while remaining > 0:
-        c = cir[i]
-        if capacities[c] > 0:
-            deltas.append((c, 1))
-            capacities[c] -= 1
-            remaining -= 1
-        # advance pointer
-        i = (i + 1) % len(cir)
+    n = len(pool)
 
-        # (Optional) micro-optimization: if everyone is at 0 capacity, we'd have
-        # returned earlier due to total_capacity check.
+    # Round-robin add 1 wind at a time, respecting capacities
+    while remaining > 0:
+        if capacities[i] > 0:
+            deltas.append((pool[i], 1))
+            capacities[i] -= 1
+            remaining -= 1
+        i = (i + 1) % n
 
     return True, deltas
 
