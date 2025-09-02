@@ -32,3 +32,12 @@ __pycache__/
 *.zip
 __pycache__/
 *.pyc
+
+# builds/artifacts
+*.zip
+__pycache__/
+*.pyc
+# local helpers
+d0
+dd1
+end
