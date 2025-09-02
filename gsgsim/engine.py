@@ -1,9 +1,11 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Callable, List, Tuple
 from .models import GameState, Player
 from .payments import distribute_wind
 
-def deploy_from_hand(gs: GameState, player: Player, hand_idx: int) -> bool:
+Chooser = Callable[[List[Tuple[int, object, int]], int], Optional[List[Tuple[int, int]]]]
+
+def deploy_from_hand(gs: GameState, player: Player, hand_idx: int, chooser: Optional[Chooser] = None) -> bool:
     if hand_idx < 0 or hand_idx >= len(player.hand):
         print("invalid hand index")
         return False
@@ -14,7 +16,7 @@ def deploy_from_hand(gs: GameState, player: Player, hand_idx: int) -> bool:
 
     # Pay wind
     if wind_cost > 0:
-        if not distribute_wind(player, total_cost=wind_cost, auto=True):
+        if not distribute_wind(player, total_cost=wind_cost, auto=(chooser is None), chooser=chooser):
             print("could not pay wind")
             return False
 
