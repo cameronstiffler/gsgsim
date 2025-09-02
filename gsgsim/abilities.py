@@ -18,6 +18,9 @@ def registers(name: str, idx: int):
 
 
 def use_ability(gs, card, idx: int) -> bool:
+    # Block active abilities on deploy turn
+    if getattr(card, "new_this_turn", False):
+        return False
     key = (getattr(card, "name", "").lower(), idx)
     fn = REGISTRY.get(key)
     if not fn:
