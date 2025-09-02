@@ -108,7 +108,7 @@ class RichUI:
             if m:
                 src = int(m.group(1))
                 abil = int(m.group(2))
-                use_ability_cli(gs, src, abil)
+                use_ability_cli(gs, src, abil, m.group(3))
                 continue
 
-            self.console.print("commands: help | quit(q) | end(e) | dN | ddN | u <src> <abil>")
+            self.console.print("commands: help | quit(q) | end(e) | dN | ddN | u <src> <abil> [p1|p2:idx[,idx]|all]")
