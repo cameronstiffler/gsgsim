@@ -95,3 +95,35 @@ def parse_targets(spec: str, gs) -> list:
         if 0 <= i < len(board):
             out.append(board[i])
     return out
+
+
+def parse_payplan(spec: str):
+    """Return (side, plan:list[(idx, amt)], force:bool). 'spec' like 'p1:0x2,3x1 [force]'."""
+    spec = (spec or "").strip()
+    tokens = spec.split()
+    if not tokens:
+        return None, [], False
+    base = tokens[0]
+    force = any(t.lower() == "force" for t in tokens[1:])
+    side, _, rest = base.partition(":")
+    side = side.lower()
+    plan = []
+    for part in filter(None, (p.strip() for p in rest.split(","))):
+        if "x" in part:
+            i, x, a = part.partition("x")
+            if i.isdigit() and a.isdigit():
+                plan.append((int(i), int(a)))
+        else:
+            # default 1 if no 'xN'
+            if part.isdigit():
+                plan.append((int(part), 1))
+    return side, plan, force
+
+
+def pay_cli(gs, amount: int, spec: str) -> None:
+    from .payments import manual_pay
+
+    side, plan, force = parse_payplan(spec)
+    player = gs.p1 if side in ("p1", "self", "me") else gs.p2
+    ok = manual_pay(player, amount, plan, allow_lethal_sl=force)
+    print("pay ok" if ok else "pay failed")

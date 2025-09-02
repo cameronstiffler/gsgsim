@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Callable, Dict, Tuple
 
-from .payments import distribute_wind
+from .effects import run_effects
 
 # Minimal, UI-agnostic registry so we can wire abilities one by one.
 
@@ -24,39 +24,43 @@ def use_ability(gs, card, idx: int, targets: list | None = None) -> bool:
     if getattr(card, "new_this_turn", False):
         return False
 
-    # Ability object (if your engine stores them) or a placeholder; allow strings but treat as active
     abilities = getattr(card, "abilities", [])
     try:
         ability = abilities[idx]
     except Exception:
         return False
 
-    # Find handler before paying any costs
+    # Determine if we have a registry handler up front
     key = (getattr(card, "name", "").lower(), idx)
     fn = REGISTRY.get(key)
-    if not fn:
-        return False
 
     # Passive abilities cannot be actively used
     if getattr(ability, "passive", False):
         return False
 
-    # Determine wind cost
+    # If neither effects nor handler exist, fail before charging cost
+    effects = getattr(ability, "effects", None) or []
+    has_exec = bool(effects) or bool(fn)
+    if not has_exec:
+        return False
+
+    # Pay wind cost only after we know the ability can execute
     cost = getattr(ability, "cost", {}) or {}
     wind_cost = int(cost.get("wind", 0) or 0)
-
-    # Only require turn_player if we actually need to pay
     if wind_cost > 0:
         owner = getattr(gs, "turn_player", None)
         if owner is None:
             return False
-        # from .payments import distribute_wind
+        from .payments import distribute_wind
 
         if not distribute_wind(owner, wind_cost):
             return False
 
-    # Execute handler (targets already parsed by UI)
-    return fn(gs, card, targets)
+    # Prefer effect specs if present; else use registry handler
+    if effects:
+        return bool(run_effects(gs, card, targets, effects))
+    else:
+        return bool(fn(gs, card, targets))
 
 
 def _mark_target(gs, card):

@@ -100,4 +100,13 @@ class RichUI:
                 spec = parts[3] if len(parts) >= 4 else None
                 use_ability_cli(gs, src, abil, spec)
                 continue
-            self.console.print("commands: help | quit(q) | end(e) | dN | ddN | u <src> <abil> [p1|p2:idx[,idx]|all]")
+
+            # manual wind payment
+            if parts and parts[0] == "pay" and len(parts) >= 3 and parts[1].isdigit():
+                amount = int(parts[1])
+                spec = " ".join(parts[2:])
+                from ..engine import pay_cli
+
+                pay_cli(gs, amount, spec)
+                continue
+            self.console.print("commands: help | quit(q) | end(e) | dN | ddN | u <src> <abil> [p1|p2:idx[,idx]|all] | pay <amount> p1|p2:idxxN[,idxxM] [force]")
