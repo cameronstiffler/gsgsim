@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Set
+from typing import Any  # fallback for typing; replace with real Effect when available
+from typing import Any as Effect
+from typing import Dict, List, Optional, Set
 
 
 # Enums / simple types

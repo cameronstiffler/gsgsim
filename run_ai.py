@@ -1,31 +1,40 @@
 #!/usr/bin/env python
 from __future__ import annotations
-import argparse, sys
+
+import argparse
+import sys
+
 
 def get_init_game():
     # Prefer engine.init_game (library), fall back to gsg_sim.init_game if present
     try:
         from gsgsim.engine import init_game  # type: ignore
+
         return init_game
     except Exception:
         pass
     try:
         from gsg_sim import init_game  # type: ignore
+
         return init_game
     except Exception:
         print("Could not locate init_game in gsgsim.engine or gsg_sim.", file=sys.stderr)
         sys.exit(2)
 
+
 def get_ui(name: str):
     if name == "rich":
         from gsgsim.ui.rich_ui import RichUI
+
         return RichUI()
     elif name in ("term", "terminal"):
         from gsgsim.ui.terminal import TerminalUI
+
         return TerminalUI()
     else:
         print(f"Unknown UI '{name}'. Use 'rich' or 'term'.", file=sys.stderr)
         sys.exit(2)
+
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="GSGSim launcher with optional AI player.")
@@ -45,6 +54,7 @@ def main(argv=None):
 
     ui = get_ui(args.ui)
     ui.run_loop(gs)
+
 
 if __name__ == "__main__":
     main()

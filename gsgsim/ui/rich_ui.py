@@ -1,11 +1,11 @@
 from __future__ import annotations
+
 import re
-from typing import List, Tuple, Optional
+
 from rich.console import Console
 from rich.table import Table
-from rich.text import Text
-from rich.style import Style
-from ..models import GameState, Card, Rank
+
+from ..models import Card, GameState
 
 try:
     from .. import engine_rule_shim
@@ -51,7 +51,13 @@ class RichUI:
             for i, card in enumerate(getattr(player, "board", [])):
                 abil = getattr(card, "abilities", [])
                 abil_txt = ", ".join(f"{idx}:{name}" for idx, name in enumerate(abil)) if abil else "-"
-                t.add_row(str(i), getattr(card, "name", "?"), rank_icon(card), str(getattr(card, "wind", 0)), abil_txt)
+                t.add_row(
+                    str(i),
+                    getattr(card, "name", "?"),
+                    rank_icon(card),
+                    str(getattr(card, "wind", 0)),
+                    abil_txt,
+                )
             return t
 
         c.print(board_table("Board P1", gs.p1))
@@ -64,7 +70,7 @@ class RichUI:
             t.add_column("Name")
             t.add_column("Cost")
             for i, card in enumerate(player.hand):
-                cost = f"{getattr(card, 'deploy_wind', 0)}⟲ {getattr(card,'deploy_gear',0)}⛭ {getattr(card,'deploy_meat',0)}⚈"
+                cost = f"{getattr(card, 'deploy_wind', 0)}⟲ {getattr(card, 'deploy_gear', 0)}⛭ {getattr(card, 'deploy_meat', 0)}⚈"
                 t.add_row(str(i), getattr(card, "name", "?"), cost)
             return t
 
@@ -100,7 +106,8 @@ class RichUI:
                 continue
             m = re.fullmatch(r"u\s+(\d+)\s+(\d+)", line)
             if m:
-                src = int(m.group(1)); abil = int(m.group(2))
+                src = int(m.group(1))
+                abil = int(m.group(2))
                 use_ability_cli(gs, src, abil)
                 continue
 

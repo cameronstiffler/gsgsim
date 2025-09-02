@@ -1,9 +1,12 @@
 from __future__ import annotations
-from typing import List, Tuple, Optional, Callable
-from .models import Player, Card
+
+from typing import Callable, List, Optional, Tuple
+
+from .models import Card, Player
 
 # Chooser: UI-provided callback that gets (eligible, total_cost) and returns a plan [(idx, amt), ...]
 Chooser = Callable[[List[Tuple[int, Card, int]], int], Optional[List[Tuple[int, int]]]]
+
 
 def _eligible_with_caps(player: Player) -> List[Tuple[int, Card, int]]:
     """
@@ -54,7 +57,8 @@ def _auto_plan(eligible: List[Tuple[int, Card, int]], total_cost: int) -> Option
 
     # Spend from non-SL first (any cap is fine here)
     for i, c, cap in non_sl:
-        if need == 0: break
+        if need == 0:
+            break
         take = min(cap, need)
         if take > 0:
             plan.append((i, take))
@@ -65,7 +69,8 @@ def _auto_plan(eligible: List[Tuple[int, Card, int]], total_cost: int) -> Option
 
     # Spend from SLs, but only 'safe' capacity (up to 3 - current wind)
     for i, c, cap in sls:
-        if need == 0: break
+        if need == 0:
+            break
         current = getattr(c, "wind", 0)
         safe_cap = max(0, 3 - current)  # keep SL alive (4 would be lethal)
         take = min(safe_cap, need)

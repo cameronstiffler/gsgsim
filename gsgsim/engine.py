@@ -1,10 +1,13 @@
 from __future__ import annotations
-from typing import Optional, Callable, List, Tuple
+
+from typing import Callable, List, Optional, Tuple
+
+from .abilities import use_ability
 from .models import GameState, Player
 from .payments import distribute_wind
-from .abilities import use_ability
 
 Chooser = Callable[[List[Tuple[int, object, int]], int], Optional[List[Tuple[int, int]]]]
+
 
 def deploy_from_hand(gs: GameState, player: Player, hand_idx: int, chooser: Optional[Chooser] = None) -> bool:
     if hand_idx < 0 or hand_idx >= len(player.hand):
@@ -68,6 +71,8 @@ def select_ui(name: str):
     """Lazy import to avoid engine<->UI circular imports."""
     if name and name.lower() == "rich":
         from .ui.rich_ui import RichUI
+
         return RichUI()
     from .ui.terminal import TerminalUI
+
     return TerminalUI()

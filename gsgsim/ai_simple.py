@@ -1,5 +1,7 @@
 from __future__ import annotations
-from typing import Optional, Tuple, List
+
+from typing import List, Tuple
+
 
 def _hand_cost_tuple(card) -> Tuple[int, int, int]:
     w = int(getattr(card, "deploy_wind", 0) or 0)
@@ -7,20 +9,25 @@ def _hand_cost_tuple(card) -> Tuple[int, int, int]:
     m = int(getattr(card, "deploy_meat", 0) or 0)
     return (w, g, m)
 
+
 def _can_afford_auto(gs, player, idx) -> bool:
     try:
         from .engine import deploy_from_hand
+
         ok = deploy_from_hand(gs, player, idx, dry_run=True)
         return bool(ok)
     except TypeError:
         from .engine import deploy_from_hand
+
         ok = deploy_from_hand(gs, player, idx)
         if ok:
             return True
         return False
 
+
 def take_turn(gs, *, logger=None) -> None:
-    from .engine import end_of_turn, deploy_from_hand
+    from .engine import deploy_from_hand, end_of_turn
+
     me = gs.turn_player
     playable: List[Tuple[int, tuple]] = []
     for i, c in enumerate(me.hand):

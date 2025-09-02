@@ -1,15 +1,23 @@
 repos:
   - repo: https://github.com/psf/black
-    rev: 24.8.0
-    hooks: [{ id: black }]
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks: [{ id: isort }]
-  - repo: https://github.com/PyCQA/flake8
-    rev: 7.1.1
-    hooks: [{ id: flake8 }]
+    rev: 25.1.0
+    hooks:
+      - id: black
+        args: ["-l", "200"]
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 6.0.1
+    hooks:
+      - id: isort
+
   - repo: https://github.com/PyCQA/autoflake
     rev: v2.3.1
     hooks:
       - id: autoflake
-        args: [--remove-all-unused-imports, --remove-unused-variables, --in-place]
+        args: ["-r", "--in-place", "--remove-all-unused-imports", "--ignore-init-module-imports"]
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        additional_dependencies: []

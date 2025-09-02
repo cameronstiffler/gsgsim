@@ -1,5 +1,6 @@
 # Monkeypatch draw() and end_of_turn() to set/clear 'new' flags and avoid changing engine.py
 from __future__ import annotations
+
 from typing import Any
 
 try:
@@ -9,7 +10,7 @@ except Exception:
 
 if _eng is not None:
     _orig_draw = getattr(_eng, "draw", None)
-    _orig_eot  = getattr(_eng, "end_of_turn", None)
+    _orig_eot = getattr(_eng, "end_of_turn", None)
 
     def _set_new_in_hand(player: Any, before_len: int):
         try:

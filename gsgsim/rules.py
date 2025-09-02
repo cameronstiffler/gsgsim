@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from .models import Card, Player
+
 
 def apply_wind_with_resist(attacker_owner: Player, defender_owner: Player, target: Card, amount: int) -> int:
     if amount <= 0:
@@ -11,6 +13,7 @@ def apply_wind_with_resist(attacker_owner: Player, defender_owner: Player, targe
     target.wind = getattr(target, "wind", 0) + actual
     return actual
 
+
 def destroy_if_needed(owner: Player, card: Card) -> None:
     """
     Retire card when wind >= 4. Remove from board, append to owner's retired pile.
@@ -21,6 +24,7 @@ def destroy_if_needed(owner: Player, card: Card) -> None:
             owner.board.remove(card)
         if card not in owner.retired:
             owner.retired.append(card)
+
 
 def can_target_card(src: Card, tgt: Card) -> bool:
     # Extend later with Cover/Immunity/etc.
