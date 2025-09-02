@@ -12,105 +12,96 @@ try:
 except Exception:
     engine_rule_shim = None
 
+
 def rank_icon(card: Card) -> str:
     r = getattr(card, "rank", None)
-    if r == Rank.SL: return " ⭐"
-    if r == Rank.SG: return " 🔶"
-    if r == Rank.TITAN or r == getattr(Rank, "TN", None): return " 💪"
-    return ""
+    if isinstance(r, str):
+        return "⭐" if r.upper() == "SL" else "BG"
+    if hasattr(r, "name"):
+        return "⭐" if str(r.name).upper() == "SL" else str(r.name)
+    return "?"
 
-def prop_icons(card: Card) -> str:
-    props = getattr(card, "properties", {}) or {}
-    statuses = getattr(card, "statuses", {}) or {}
-    out = []
-    if props.get("resist") or "resist" in statuses:
-        out.append(" ✋")
-    if props.get("no_unwind") or "no_unwind" in statuses:
-        out.append(" 🚫")
-    return "".join(out)
-
-def cost_text(card: Card) -> Text:
-    w = int(getattr(card, "deploy_wind", 0) or 0)
-    g = int(getattr(card, "deploy_gear", 0) or 0)
-    m = int(getattr(card, "deploy_meat", 0) or 0)
-    t = Text()
-    t.append(str(w), style="white"); t.append("⟲", style="cyan"); t.append(" ")
-    t.append(str(g), style="white"); t.append("⛭", style="bright_black"); t.append(" ")
-    t.append(str(m), style="white"); t.append("⚈", style="red")
-    return t
-
-def ability_lines(card: Card) -> List[Text]:
-    out = []
-    for j, a in enumerate(getattr(card, "abilities", []) or []):
-        line = Text(f"{j}: ")
-        nm = getattr(a, "name", None) or "ABILITY"
-        line.append(nm)
-        w = int(getattr(a, "wind_cost", 0) or 0)
-        g = int(getattr(a, "gear_cost", 0) or 0)
-        m = int(getattr(a, "meat_cost", 0) or 0)
-        if any((w,g,m)):
-            line.append("  ")
-            line.append(str(w), style="white"); line.append("⟲", style="cyan"); line.append(" ")
-            line.append(str(g), style="white"); line.append("⛭", style="bright_black"); line.append(" ")
-            line.append(str(m), style="white"); line.append("⚈", style="red")
-        desc = getattr(a, "text", None) or getattr(a, "description", None)
-        if desc:
-            line.append("  — "); line.append(desc)
-        out.append(line)
-    if not out:
-        out.append(Text("-"))
-    return out
-
-def name_with_icons(card: Card) -> Text:
-    t = Text(card.name)
-    t.append(rank_icon(card))
-    t.append(prop_icons(card))
-    if getattr(card, "new_this_turn", False) or getattr(card, "new_in_hand", False):
-        t.append(" ✨", style=Style(color="yellow"))
-    return t
 
 class RichUI:
-    def __init__(self):
+    def __init__(self) -> None:
         self.console = Console()
 
     def _check_game_over(self, gs: GameState) -> bool:
-        if engine_rule_shim:
-            winner = engine_rule_shim.check_sl_loss(gs)
-            if winner:
-                self.console.print(f"[bold red]Game over! Winner: {winner}[/bold red]")
+        if engine_rule_shim and hasattr(engine_rule_shim, "check_sl_loss"):
+            loser = engine_rule_shim.check_sl_loss(gs)
+            if loser is not None:
+                winner = "P1" if loser == "P2" else "P2"
+                self.console.print(f"[bold]Game over! Winner: {winner}[/bold]")
                 return True
         return False
 
-    def render(self, gs: GameState):
-        def board_table(title, p):
+    def render(self, gs: GameState) -> None:
+        c = self.console
+        # Header
+        c.print(f"Turn {gs.turn_number} | Player: {'P1' if gs.turn_player is gs.p1 else 'P2'}")
+
+        # Board view (both sides)
+        def board_table(title: str, player) -> Table:
             t = Table(title=title)
-            t.add_column("#", justify="right")
+            t.add_column("#", justify="right", style="cyan")
             t.add_column("Name")
+            t.add_column("Rank")
             t.add_column("Wind", justify="right")
             t.add_column("Abilities")
-            for i, c in enumerate(p.board):
-                abil_text = Text("\n").join(ability_lines(c))
-                t.add_row(str(i), name_with_icons(c), str(getattr(c,"wind",0)), abil_text)
+            for i, card in enumerate(getattr(player, "board", [])):
+                abil = getattr(card, "abilities", [])
+                abil_txt = ", ".join(f"{idx}:{name}" for idx, name in enumerate(abil)) if abil else "-"
+                t.add_row(str(i), getattr(card, "name", "?"), rank_icon(card), str(getattr(card, "wind", 0)), abil_txt)
             return t
 
-        self.console.print(board_table(f"Board {gs.p1.name}", gs.p1))
-        self.console.print(board_table(f"Board {gs.p2.name}", gs.p2))
-        h = Table(title=f"{gs.turn_player.name} hand ({len(gs.turn_player.hand)})")
-        h.add_column("#", justify="right"); h.add_column("Name"); h.add_column("Cost")
-        for i,c in enumerate(gs.turn_player.hand):
-            h.add_row(str(i), name_with_icons(c), cost_text(c))
-        self.console.print(h)
+        c.print(board_table("Board P1", gs.p1))
+        c.print(board_table("Board P2", gs.p2))
+
+        # Hand for current and opponent (like your previous UI)
+        def hand_table(title: str, player) -> Table:
+            t = Table(title=f"{title} hand ({len(player.hand)})")
+            t.add_column("#", justify="right", style="cyan")
+            t.add_column("Name")
+            t.add_column("Cost")
+            for i, card in enumerate(player.hand):
+                cost = f"{getattr(card, 'deploy_wind', 0)}⟲ {getattr(card,'deploy_gear',0)}⛭ {getattr(card,'deploy_meat',0)}⚈"
+                t.add_row(str(i), getattr(card, "name", "?"), cost)
+            return t
+
+        if gs.turn_player is gs.p1:
+            c.print(hand_table("P1", gs.p1))
+        else:
+            c.print(hand_table("P2", gs.p2))
 
     def run_loop(self, gs: GameState):
         from ..engine import deploy_from_hand, end_of_turn, use_ability_cli
+
         while True:
-            if self._check_game_over(gs): break
+            if self._check_game_over(gs):
+                break
             self.render(gs)
-            try: line = self.console.input("> ").strip()
-            except: break
-            if line in ("quit","q"): break
-            if line in ("end","e"): end_of_turn(gs); continue
+            try:
+                line = self.console.input("> ").strip()
+            except Exception:
+                break
+            if line in ("quit", "q"):
+                break
+            if line in ("end", "e"):
+                end_of_turn(gs)
+                continue
             m = re.fullmatch(r"d(\d+)", line)
-            if m: deploy_from_hand(gs, gs.turn_player, int(m.group(1))); continue
+            if m:
+                deploy_from_hand(gs, gs.turn_player, int(m.group(1)))
+                continue
             m = re.fullmatch(r"dd(\d+)", line)
-            if m: deploy_from_hand(gs, gs.turn_player, int(m.group(1))); continue
+            if m:
+                # same as dN for now; engine's auto planner refuses lethal SL payments
+                deploy_from_hand(gs, gs.turn_player, int(m.group(1)))
+                continue
+            m = re.fullmatch(r"u\s+(\d+)\s+(\d+)", line)
+            if m:
+                src = int(m.group(1)); abil = int(m.group(2))
+                use_ability_cli(gs, src, abil)
+                continue
+
+            self.console.print("commands: help | quit(q) | end(e) | dN | ddN | u <src> <abil>")
