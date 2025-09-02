@@ -47,3 +47,7 @@ d0
 dd1
 end
 
+.venv/
+__pycache__/
+*.patch
+*.zip
