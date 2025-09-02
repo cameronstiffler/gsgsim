@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 from rich.console import Console
 from rich.table import Table
 
@@ -80,7 +78,7 @@ class RichUI:
             c.print(hand_table("P2", gs.p2))
 
     def run_loop(self, gs: GameState):
-        from ..engine import deploy_from_hand, end_of_turn, use_ability_cli
+        from ..engine import end_of_turn, use_ability_cli
 
         while True:
             if self._check_game_over(gs):
@@ -95,20 +93,11 @@ class RichUI:
             if line in ("end", "e"):
                 end_of_turn(gs)
                 continue
-            m = re.fullmatch(r"d(\d+)", line)
-            if m:
-                deploy_from_hand(gs, gs.turn_player, int(m.group(1)))
+            parts = line.split()
+            if len(parts) >= 3 and parts[0] == "u" and parts[1].isdigit() and parts[2].isdigit():
+                src = int(parts[1])
+                abil = int(parts[2])
+                spec = parts[3] if len(parts) >= 4 else None
+                use_ability_cli(gs, src, abil, spec)
                 continue
-            m = re.fullmatch(r"dd(\d+)", line)
-            if m:
-                # same as dN for now; engine's auto planner refuses lethal SL payments
-                deploy_from_hand(gs, gs.turn_player, int(m.group(1)))
-                continue
-            m = re.fullmatch(r"u\s+(\d+)\s+(\d+)", line)
-            if m:
-                src = int(m.group(1))
-                abil = int(m.group(2))
-                use_ability_cli(gs, src, abil, m.group(3))
-                continue
-
             self.console.print("commands: help | quit(q) | end(e) | dN | ddN | u <src> <abil> [p1|p2:idx[,idx]|all]")

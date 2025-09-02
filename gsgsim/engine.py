@@ -52,19 +52,16 @@ def end_of_turn(gs: GameState) -> None:
     start_of_turn(gs)
 
 
-def use_ability_cli(gs: GameState, src_idx: int, abil_idx: int) -> None:
-    """CLI-friendly wrapper: try to execute ability; print a crisp status."""
+def use_ability_cli(gs, src_idx: int, abil_idx: int, target_spec: str | None = None) -> None:
     try:
         card = gs.turn_player.board[src_idx]
     except Exception:
         print("ability failed")
         return
-    ok = use_ability(gs, card, abil_idx)
-    if ok:
-        print("ability ok")
-    else:
-        name = getattr(card, "name", "<?>")
-        print(f"ability not implemented: {name} [{abil_idx}]")
+    targets = parse_targets(target_spec or "", gs)
+    ok = use_ability(gs, card, abil_idx, targets)
+    print("ability ok" if ok else f'ability failed (passive/new/handler/cost): {getattr(card, "name", "<??>")} [{abil_idx}]')
+    return
 
 
 def select_ui(name: str):
@@ -76,3 +73,25 @@ def select_ui(name: str):
     from .ui.terminal import TerminalUI
 
     return TerminalUI()
+
+
+def parse_targets(spec: str, gs) -> list:
+    spec = (spec or "").strip()
+    if not spec:
+        return []
+    side, _, rest = spec.partition(":")
+    side = side.lower()
+    player = gs.p1 if side in ("p1", "self", "me") else gs.p2
+    if rest.lower() == "all":
+        return list(getattr(player, "board", []))
+    idxs = []
+    for tok in rest.split(","):
+        tok = tok.strip()
+        if tok.isdigit():
+            idxs.append(int(tok))
+    out = []
+    board = list(getattr(player, "board", []))
+    for i in idxs:
+        if 0 <= i < len(board):
+            out.append(board[i])
+    return out
