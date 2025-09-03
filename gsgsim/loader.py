@@ -30,6 +30,7 @@ def parse_rank(text: str | None) -> Rank:
 def build_cards(deck_obj: Dict[str, Any], *, faction: Optional[str] = None) -> List[Card]:
     cards: List[Card] = []
     for raw in deck_obj.get("goons", []):
+        raw = _normalize_card_flags(raw, default_faction=faction)
         name = raw["name"]
         rank = parse_rank(raw.get("rank", "Basic Goon"))
         traits = set(raw.get("icons", []))
@@ -69,18 +70,18 @@ def build_cards(deck_obj: Dict[str, Any], *, faction: Optional[str] = None) -> L
             # effect inference minimal (keep as-is)
             abilities.append(Ability(a.get("name", "ABILITY"), cost, [], passive=passive))
 
-        cards.append(
-            Card(
-                name=name,
-                rank=rank,
-                faction=faction,
-                traits=traits,
-                abilities=abilities,
-                deploy_wind=dw,
-                deploy_gear=dg,
-                deploy_meat=dm,
-            )
+        card = Card(
+            name=name,
+            rank=rank,
+            faction=faction,
+            traits=traits,
+            abilities=abilities,
+            deploy_wind=dw,
+            deploy_gear=dg,
+            deploy_meat=dm,
         )
+        _apply_card_flags(card, raw)
+        cards.append(card)
     return cards
 
 
@@ -91,19 +92,16 @@ def find_squad_leader(cards: List[Card]) -> Optional[Card]:
     return None
 
 
-# === Back-compat: normalize icons array to explicit booleans ===
+# === Back-compat + normalization for card flags ===
 def _normalize_card_flags(d: dict, default_faction: str | None = None) -> dict:
     """
-    Accepts either old 'icons' list or explicit boolean fields.
-    Explicit booleans take precedence if present.
-    - icons: ["narc","pcu","biological","mechanical","resist","no_unwind"]
-    - new:   faction: "NARC"|"PCU", biological: bool, mechanical: bool, resist: bool, no_unwind: bool
+    Supports either explicit booleans or legacy 'icons' list.
+    Produces: faction, biological, mechanical, resist, no_unwind on the dict.
     """
-    icons = set((d.get("icons") or []))
-    icons = {str(x).strip().lower() for x in icons}
+    icons = {str(x).strip().lower() for x in (d.get("icons") or [])}
 
-    # faction: explicit wins; else from icons; else default_faction
-    if "faction" not in d or not d["faction"]:
+    # faction
+    if not d.get("faction"):
         if "narc" in icons:
             d["faction"] = "NARC"
         elif "pcu" in icons:
@@ -111,14 +109,42 @@ def _normalize_card_flags(d: dict, default_faction: str | None = None) -> dict:
         elif default_faction:
             d["faction"] = default_faction
 
-    # boolean flags: explicit wins; else from icons; else False
-    def _set_bool(key: str, icon_name: str):
+    def ensure_bool(key: str, token: str):
         if key not in d:
-            d[key] = icon_name in icons
+            d[key] = token in icons
 
-    _set_bool("biological", "biological")
-    _set_bool("mechanical", "mechanical")
-    _set_bool("resist", "resist")
-    _set_bool("no_unwind", "no_unwind")
-
+    ensure_bool("biological", "biological")
+    ensure_bool("mechanical", "mechanical")
+    ensure_bool("resist", "resist")
+    ensure_bool("no_unwind", "no_unwind")
     return d
+
+
+def _apply_card_flags(card, data: dict) -> None:
+    """
+    Ensure the Card instance exposes booleans the UI expects.
+    Explicit booleans beat icons. Keep icons on card as fallback.
+    """
+    icons = {str(x).strip().lower() for x in (data.get("icons") or [])}
+
+    def val(key: str, token: str) -> bool:
+        return bool(data.get(key, False) or (token in icons))
+
+    for attr, token in (
+        ("biological", "biological"),
+        ("mechanical", "mechanical"),
+        ("resist", "resist"),
+        ("no_unwind", "no_unwind"),
+    ):
+        try:
+            if not getattr(card, attr, False):
+                setattr(card, attr, val(attr, token))
+        except Exception:
+            pass
+
+    # Keep a copy of icons on the card so UI can read it if needed
+    try:
+        if not getattr(card, "icons", None) and icons:
+            card.icons = list(icons)
+    except Exception:
+        pass
