@@ -11,22 +11,168 @@ except Exception:
     engine_rule_shim = None
 
 
-def rank_icon(card: Card) -> str:
+# ---------- icon/name helpers ----------
+
+
+def _safe_str(x) -> str:
+    try:
+        return str(x)
+    except Exception:
+        return "?"
+
+
+def _is_true(obj, *keys) -> bool:
+    """Check multiple boolean-ish attributes on obj; treat 'truthy' as True."""
+    for k in keys:
+        try:
+            v = getattr(obj, k, None)
+            if isinstance(v, bool):
+                if v:
+                    return True
+            elif isinstance(v, (int, str)):
+                if str(v).strip().lower() in ("1", "true", "yes", "y", "on"):
+                    return True
+            elif v:
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _icons_has(card: Card, token: str) -> bool:
+    """Return True if card.icons contains token (case-insensitive)."""
+    try:
+        icons = getattr(card, "icons", None) or []
+        return token.lower() in {str(x).strip().lower() for x in icons}
+    except Exception:
+        return False
+
+
+def _rank_icon_for_name(card: Card) -> str:
+    """
+    Rank icon inline:
+      SL -> ⭐, SG -> 🔶, T -> Ω, BG/other -> ''
+    """
     r = getattr(card, "rank", None)
+    tag = None
     if isinstance(r, str):
-        return "⭐" if r.upper() == "SL" else "BG"
-    if hasattr(r, "name"):
-        return "⭐" if str(r.name).upper() == "SL" else str(r.name)
-    return "?"
+        tag = r.strip().upper()
+    elif hasattr(r, "name"):
+        tag = _safe_str(getattr(r, "name", "")).strip().upper()
+    if tag == "SL":
+        return "⭐"
+    if tag == "SG":
+        return "🔶"
+    if tag == "T":
+        return "Ω"
+    return ""  # BG/unknown => no icon
 
 
-def cost_str(card):
-    return f"{getattr(card, 'deploy_wind', 0)}⟲ {getattr(card, 'deploy_gear', 0)}⛭ {getattr(card, 'deploy_meat', 0)}⚈"
+def _bio_mech_icon(card: Card) -> str:
+    out = []
+    if _is_true(card, "biological", "is_bio", "bio") or _icons_has(card, "biological"):
+        out.append("🥩")
+    if _is_true(card, "mechanical", "is_mech", "mech") or _icons_has(card, "mechanical"):
+        out.append("⚙️")
+    return "".join(out)
+
+
+def _resist_icon(card: Card) -> str:
+    return "✋" if _is_true(card, "resist", "has_resist") or _icons_has(card, "resist") else ""
+
+
+def _no_unwind_icon(card: Card) -> str:
+    return "🚫" if _is_true(card, "no_unwind") or _icons_has(card, "no_unwind") else ""
+
+
+def _resolve_faction(player, card) -> str:
+    """
+    Prefer player.faction -> player.name -> card.faction -> icons (narc/pcu).
+    Return 'NARC' or 'PCU' or ''.
+    """
+    for obj, attr in ((player, "faction"), (player, "name"), (card, "faction")):
+        try:
+            v = getattr(obj, attr, None)
+            if v:
+                vu = _safe_str(v).upper()
+                if "NARC" in vu:
+                    return "NARC"
+                if "PCU" in vu:
+                    return "PCU"
+        except Exception:
+            pass
+    if _icons_has(card, "narc"):
+        return "NARC"
+    if _icons_has(card, "pcu"):
+        return "PCU"
+    return ""
+
+
+def _faction_icon(f: str) -> str:
+    fu = (f or "").upper()
+    if fu == "NARC":
+        return "🚨"
+    if fu == "PCU":
+        return "🌀"
+    return ""
+
+
+def _locked_icon(card: Card) -> str:
+    """
+    🔒 means 'just deployed; cannot act this turn'.
+    Use a 'just_deployed' flag if present; else treat turns_in_play == 0 as locked.
+    """
+    if _is_true(card, "just_deployed"):
+        return "🔒"
+    try:
+        if getattr(card, "turns_in_play", None) == 0:
+            return "🔒"
+    except Exception:
+        pass
+    return ""
+
+
+def _name_with_icons(card: Card, faction_str: str) -> str:
+    """
+    NAME + [rank][resist][no_unwind][bio|mech][faction][locked] — no spaces
+    Example: Lokar Simmons⭐✋🥩🚨
+    """
+    name = _safe_str(getattr(card, "name", "?"))
+    pieces = [
+        _rank_icon_for_name(card),
+        _resist_icon(card),
+        _no_unwind_icon(card),
+        _bio_mech_icon(card),
+        _faction_icon(faction_str),
+        _locked_icon(card),
+    ]
+    return f"{name}{''.join(p for p in pieces if p)}"
+
+
+def cost_str(card: Card) -> str:
+    """Deploy cost as 'N⟲ N⛭ N⚈' (hand only)."""
+    try:
+        w = int(getattr(card, "deploy_wind", 0) or 0)
+        g = int(getattr(card, "deploy_gear", 0) or 0)
+        m = int(getattr(card, "deploy_meat", 0) or 0)
+    except Exception:
+        w = g = m = 0
+    return f"{w}⟲ {g}⛭ {m}⚈"
+
+
+# ---------- Rich UI ----------
 
 
 class RichUI:
     def __init__(self) -> None:
         self.console = Console()
+
+    def _print_ai_banner(self) -> None:
+        self.console.print(
+            """[bold]Tip:[/bold] Type [bold]ai[/bold] to have the [bold]current player[/bold] act once.
+Use [bold]ai p1[/bold] or [bold]ai p2[/bold] to target a side.
+Deploy with [bold]dN[/bold] or [bold]d N[/bold]; end turn with [bold]e[/bold] or [bold]end[/bold]."""
+        )
 
     def _check_game_over(self, gs: GameState) -> bool:
         if engine_rule_shim and hasattr(engine_rule_shim, "check_sl_loss"):
@@ -45,21 +191,14 @@ class RichUI:
             t = Table(title=title)
             t.add_column("#", justify="right", style="cyan")
             t.add_column("Name")
-            t.add_column("Rank")
             t.add_column("Wind", justify="right")
             t.add_column("Abilities")
             for i, card in enumerate(getattr(player, "board", [])):
                 abil = getattr(card, "abilities", [])
-                # allow abilities to be strings or objects with .name
-                names = []
-                for idx, a in enumerate(abil or []):
-                    n = getattr(a, "name", a)
-                    names.append(f"{idx}:{n}")
-                abil_txt = ", ".join(names) if names else "-"
+                abil_txt = ", ".join(f"{idx}:{name}" for idx, name in enumerate(abil)) if abil else "-"
                 t.add_row(
                     str(i),
-                    getattr(card, "name", "?"),
-                    rank_icon(card),
+                    _name_with_icons(card, _resolve_faction(player, card)),
                     str(getattr(card, "wind", 0)),
                     abil_txt,
                 )
@@ -74,8 +213,11 @@ class RichUI:
             t.add_column("Name")
             t.add_column("Cost")
             for i, card in enumerate(player.hand):
-                cost = cost_str(card)
-                t.add_row(str(i), getattr(card, "name", "?"), cost)
+                t.add_row(
+                    str(i),
+                    _name_with_icons(card, _resolve_faction(player, card)),
+                    cost_str(card),
+                )
             return t
 
         if gs.turn_player is gs.p1:
@@ -83,27 +225,69 @@ class RichUI:
         else:
             c.print(hand_table("P2", gs.p2))
 
-    def run_loop(self, gs: GameState):
+    def run_loop(self, gs: GameState, ai_p1: bool = False, ai_p2: bool = False, auto: bool = False):
+        from ..ai import ai_take_turn
         from ..engine import end_of_turn, use_ability_cli
+
+        self._print_ai_banner()
 
         while True:
             if self._check_game_over(gs):
                 break
+
             self.render(gs)
+
+            # Auto for flagged AI sides
+            if auto and ((gs.turn_player is gs.p1 and ai_p1) or (gs.turn_player is gs.p2 and ai_p2)):
+                prev = gs.turn_player
+                ai_take_turn(gs)
+                if gs.turn_player is prev:
+                    end_of_turn(gs)
+                continue
+
             try:
                 line = self.console.input("> ").strip()
+            except KeyboardInterrupt:
+                break
             except Exception:
                 break
 
-            if line in ("quit", "q"):
+            if not line:
+                continue
+
+            if line in ("quit", "q", "exit"):
                 break
+
             if line in ("end", "e"):
                 end_of_turn(gs)
                 continue
 
             parts = line.split()
 
-            # ability use: u SRC ABIL [TARGETSPEC]
+            # "ai" commands
+            if parts[0] == "ai":
+                if len(parts) == 1:
+                    prev = gs.turn_player
+                    ai_take_turn(gs)
+                    if gs.turn_player is prev:
+                        end_of_turn(gs)
+                else:
+                    side = parts[1].lower()
+                    side_player = gs.p1 if side in ("p1", "1") else gs.p2
+                    original = gs.turn_player
+                    gs.turn_player = side_player
+                    prev = gs.turn_player
+                    ai_take_turn(gs)
+                    if gs.turn_player is prev:
+                        end_of_turn(gs)
+                    gs.turn_player = original
+                continue
+
+            # deploy shortcuts: dN | d N (engine handles actual deploy)
+            if (parts[0].startswith("d") and parts[0][1:].isdigit()) or (parts[0] == "d" and len(parts) >= 2 and parts[1].isdigit()):
+                continue
+
+            # ability use: u <src> <abil> [target_spec]
             if len(parts) >= 3 and parts[0] == "u" and parts[1].isdigit() and parts[2].isdigit():
                 src = int(parts[1])
                 abil = int(parts[2])
@@ -111,20 +295,4 @@ class RichUI:
                 use_ability_cli(gs, src, abil, spec)
                 continue
 
-            # manual wind payment: pay AMOUNT p1|p2:idx[xN][,idx[xM] ...] [force]
-            if parts and parts[0] == "pay" and len(parts) >= 3 and parts[1].isdigit():
-                amount = int(parts[1])
-                spec = " ".join(parts[2:])
-                from ..engine import pay_cli
-
-                pay_cli(gs, amount, spec)
-                continue
-
-            # minimal AI helper
-            if parts and parts[0] == "ai":
-                from ..ai import ai_take_turn
-
-                ai_take_turn(gs)
-                continue
-
-            self.console.print("commands: help | quit(q) | end(e) | dN | ddN | " "u <src> <abil> [p1|p2:idx[,idx]|all] | " "pay <amount> p1|p2:idxxN[,idxxM] [force] | ai")
+            self.console.print("commands: help | quit(q) | end(e) | dN|d N | ddN|dd N | " "u <src> <abil>  | ai [p1|p2]  " "(start flags: --ai p1|p2|both, --auto)")

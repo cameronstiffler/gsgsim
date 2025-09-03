@@ -47,7 +47,7 @@
     ],
     "icons": [
       "pcu",
-      "organic",
+      "biological",
       "no_unwind"
     ],
     "abilities": [
@@ -75,7 +75,7 @@
     ],
     "icons": [
       "pcu",
-      "organic"
+      "biological"
     ],
     "abilities": [
       {
@@ -104,7 +104,7 @@
     "deploy_cost": [],
     "icons": [
       "pcu",
-      "organic",
+      "biological",
       "resist"
     ],
     "abilities": [
@@ -185,7 +185,7 @@
     ],
     "icons": [
       "pcu",
-      "organic",
+      "biological",
       "resist"
     ],
     "abilities": [
@@ -273,7 +273,7 @@
     ],
     "icons": [
       "pcu",
-      "organic"
+      "biological"
     ],
     "flavor_text": "Carve us off a couple steaks and I\u2019ll grab the bottle of Zurion Noir I had them portal over last resupply. It should pair nicely.",
     "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/pcu/meatveg.png",
@@ -289,7 +289,7 @@
     ],
     "icons": [
       "pcu",
-      "organic",
+      "biological",
       "no_unwind"
     ],
     "abilities": [
@@ -379,7 +379,7 @@
     ],
     "icons": [
       "pcu",
-      "organic"
+      "biological"
     ],
     "abilities": [
       {
@@ -410,7 +410,7 @@
     ],
     "icons": [
       "pcu",
-      "organic"
+      "biological"
     ],
     "abilities": [
       {
@@ -458,7 +458,7 @@
     ],
     "icons": [
       "pcu",
-      "organic",
+      "biological",
       "mechanical"
     ],
     "abilities": [
@@ -495,7 +495,7 @@
     ],
     "icons": [
       "pcu",
-      "organic"
+      "biological"
     ],
     "abilities": [
       {

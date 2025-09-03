@@ -89,3 +89,36 @@ def find_squad_leader(cards: List[Card]) -> Optional[Card]:
         if c.rank == Rank.SL:
             return c
     return None
+
+
+# === Back-compat: normalize icons array to explicit booleans ===
+def _normalize_card_flags(d: dict, default_faction: str | None = None) -> dict:
+    """
+    Accepts either old 'icons' list or explicit boolean fields.
+    Explicit booleans take precedence if present.
+    - icons: ["narc","pcu","biological","mechanical","resist","no_unwind"]
+    - new:   faction: "NARC"|"PCU", biological: bool, mechanical: bool, resist: bool, no_unwind: bool
+    """
+    icons = set((d.get("icons") or []))
+    icons = {str(x).strip().lower() for x in icons}
+
+    # faction: explicit wins; else from icons; else default_faction
+    if "faction" not in d or not d["faction"]:
+        if "narc" in icons:
+            d["faction"] = "NARC"
+        elif "pcu" in icons:
+            d["faction"] = "PCU"
+        elif default_faction:
+            d["faction"] = default_faction
+
+    # boolean flags: explicit wins; else from icons; else False
+    def _set_bool(key: str, icon_name: str):
+        if key not in d:
+            d[key] = icon_name in icons
+
+    _set_bool("biological", "biological")
+    _set_bool("mechanical", "mechanical")
+    _set_bool("resist", "resist")
+    _set_bool("no_unwind", "no_unwind")
+
+    return d

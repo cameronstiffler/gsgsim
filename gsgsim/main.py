@@ -12,10 +12,12 @@ from .models import GameState, Player
 
 def main():
     # CLI
+
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--ui", choices=["cli", "rich"], default=os.environ.get("GSG_UI", "cli"))
     parser.add_argument("--first", choices=["random", "p1", "p2"], default=os.environ.get("GSG_FIRST", "random"))
     parser.add_argument("--ai", choices=["none", "p1", "p2", "both"], default=os.environ.get("GSG_AI", "none"))
+    parser.add_argument("--auto", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=os.environ.get("GSG_SEED", None))
     args, _ = parser.parse_known_args()
 
@@ -55,7 +57,11 @@ def main():
 
     ui = select_ui(args.ui)
     print("GSG engine ready. Decks loaded. SLs on board. (Type 'help' to see commands.)")
-    ui.run_loop(gs)
+    ai_sel = (args.ai or os.environ.get("GSG_AI") or "").strip().lower()
+    ai_p1 = ai_sel in ("p1", "both")
+    ai_p2 = ai_sel in ("p2", "both")
+    auto = bool(args.auto or os.environ.get("GSG_AUTO"))
+    ui.run_loop(gs, ai_p1=ai_p1, ai_p2=ai_p2, auto=auto)
 
 
 if __name__ == "__main__":
