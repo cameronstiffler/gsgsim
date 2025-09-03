@@ -61,3 +61,7 @@ __pycache__/
 *.bak
 *.orig
 *.rej
+
+# editor/one-off backups
+*.bak.*
+scripts/*.bak.*

@@ -34,3 +34,9 @@
 - `ai [p1|p2]` one AI action
 - `--ai p1|p2|both`, `--auto` startup flags
 
+
+## Guardrails: Rule imports & symbol drift
+
+- **No unused `rules` imports in engine modules.** If a file imports from `gsgsim.rules`, every imported name must be referenced in that file. The pre-commit hook `check-rules-import-usage` enforces this.
+- **No deprecated symbols in repo.** Banned identifiers (e.g., `deploy_cli`) must not appear in the tree. The pre-commit hook `ban-deprecated-symbols` enforces this.
+- **Wind writes still forbidden.** CI greps for direct `.wind` mutations; all changes must go through `rules.apply_wind*`.

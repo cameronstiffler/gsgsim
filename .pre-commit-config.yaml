@@ -15,3 +15,17 @@ repos:
       entry: scripts/smoke.sh
       language: system
       pass_filenames: false
+
+repos:
+- repo: local
+  hooks:
+    - id: check-rules-import-usage
+      name: check rules imports are used
+      entry: scripts/check_rules_import_usage.py
+      language: system
+      pass_filenames: false
+    - id: ban-deprecated-symbols
+      name: ban deprecated symbols
+      entry: scripts/check_deprecated_symbols.sh
+      language: system
+      pass_filenames: false

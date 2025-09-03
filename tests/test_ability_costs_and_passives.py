@@ -6,9 +6,7 @@ def mk_player(board):
 
 
 def mk_card(name, rank="BG", wind=0, new_this_turn=False, abilities=None):
-    return types.SimpleNamespace(
-        name=name, rank=rank, wind=wind, new_this_turn=new_this_turn, abilities=abilities or []
-    )
+    return types.SimpleNamespace(name=name, rank=rank, wind=wind, new_this_turn=new_this_turn, abilities=abilities or [])
 
 
 class Ability:

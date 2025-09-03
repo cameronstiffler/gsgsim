@@ -185,9 +185,7 @@ Deploy with [bold]dN[/bold] or [bold]d N[/bold]; end turn with [bold]e[/bold] or
             t.add_column("Abilities")
             for i, card in enumerate(getattr(player, "board", [])):
                 abil = getattr(card, "abilities", [])
-                abil_txt = (
-                    ", ".join(f"{idx}:{name}" for idx, name in enumerate(abil)) if abil else "-"
-                )
+                abil_txt = ", ".join(f"{idx}:{name}" for idx, name in enumerate(abil)) if abil else "-"
                 t.add_row(
                     str(i),
                     _name_with_icons(card, _resolve_faction(player, card)),
@@ -229,9 +227,7 @@ Deploy with [bold]dN[/bold] or [bold]d N[/bold]; end turn with [bold]e[/bold] or
 
             self.render(gs)
 
-            if auto and (
-                (gs.turn_player is gs.p1 and ai_p1) or (gs.turn_player is gs.p2 and ai_p2)
-            ):
+            if auto and ((gs.turn_player is gs.p1 and ai_p1) or (gs.turn_player is gs.p2 and ai_p2)):
                 prev = gs.turn_player
                 ai_take_turn(gs)
                 if gs.turn_player is prev:
@@ -308,7 +304,5 @@ Deploy with [bold]dN[/bold] or [bold]d N[/bold]; end turn with [bold]e[/bold] or
                 continue
 
             self.console.print(
-                "commands: help | quit(q) | end(e) | dN|d N | ddN|dd N | "
-                "u <src> <abil> | pay <amount> p1|p2:idx[,idx] | ai [p1|p2]  "
-                "(start flags: --ai p1|p2|both, --auto)  See: gamerules.md"
+                "commands: help | quit(q) | end(e) | dN|d N | ddN|dd N | " "u <src> <abil> | pay <amount> p1|p2:idx[,idx] | ai [p1|p2]  " "(start flags: --ai p1|p2|both, --auto)  See: gamerules.md"
             )

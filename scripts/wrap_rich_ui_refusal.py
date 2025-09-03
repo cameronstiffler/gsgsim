@@ -12,10 +12,7 @@ m = re.search(pat, s)
 if m:
     before = s
     # After the existing print, add a hint line:
-    inject = (
-        m.group(1)
-        + '        print("refused: paying wind would require lethal SL payment or no eligible payers")\n'
-    )
+    inject = m.group(1) + '        print("refused: paying wind would require lethal SL payment or no eligible payers")\n'
     s = s.replace(m.group(0), inject)
     if s != before:
         p.write_text(s)

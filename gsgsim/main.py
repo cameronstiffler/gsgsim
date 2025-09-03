@@ -15,12 +15,8 @@ def main():
 
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--ui", choices=["cli", "rich"], default=os.environ.get("GSG_UI", "cli"))
-    parser.add_argument(
-        "--first", choices=["random", "p1", "p2"], default=os.environ.get("GSG_FIRST", "random")
-    )
-    parser.add_argument(
-        "--ai", choices=["none", "p1", "p2", "both"], default=os.environ.get("GSG_AI", "none")
-    )
+    parser.add_argument("--first", choices=["random", "p1", "p2"], default=os.environ.get("GSG_FIRST", "random"))
+    parser.add_argument("--ai", choices=["none", "p1", "p2", "both"], default=os.environ.get("GSG_AI", "none"))
     parser.add_argument("--auto", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=os.environ.get("GSG_SEED", None))
     args, _ = parser.parse_known_args()

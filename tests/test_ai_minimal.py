@@ -2,9 +2,7 @@ import types
 
 
 def mk_card(name, cost=0, abil=None):
-    return types.SimpleNamespace(
-        name=name, deploy_wind=cost, abilities=abil or [], rank="BG", wind=0
-    )
+    return types.SimpleNamespace(name=name, deploy_wind=cost, abilities=abil or [], rank="BG", wind=0)
 
 
 class Ability:
@@ -18,9 +16,7 @@ class Ability:
 def test_ai_deploys_free_then_ends():
     from gsgsim.ai import ai_take_turn
 
-    gs = types.SimpleNamespace(
-        turn_player=types.SimpleNamespace(board=[], hand=[mk_card("Freebie", 0)]), p1=None, p2=None
-    )
+    gs = types.SimpleNamespace(turn_player=types.SimpleNamespace(board=[], hand=[mk_card("Freebie", 0)]), p1=None, p2=None)
 
     def end_turn(g):
         setattr(g, "ended", True)
@@ -45,9 +41,7 @@ def test_ai_uses_zero_cost_effect():
         return True
 
     gs = types.SimpleNamespace(
-        turn_player=types.SimpleNamespace(
-            board=[mk_card("Tool", 0, [Ability("PING", cost={"wind": 0}, effects=[])])], hand=[]
-        ),
+        turn_player=types.SimpleNamespace(board=[mk_card("Tool", 0, [Ability("PING", cost={"wind": 0}, effects=[])])], hand=[]),
         p1=None,
         p2=None,
     )

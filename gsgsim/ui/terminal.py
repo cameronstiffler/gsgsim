@@ -47,11 +47,7 @@ def ability_lines(c: Card) -> List[str]:
         w = int(getattr(a, "wind_cost", 0) or 0)
         g = int(getattr(a, "gear_cost", 0) or 0)
         m = int(getattr(a, "meat_cost", 0) or 0)
-        cost = (
-            f"{WHITE}{w}{RST}{CYAN}⟲{RST} {WHITE}{g}{RST}{GREY}⛭{RST} {WHITE}{m}{RST}{RED}⚈{RST}"
-            if any((w, g, m))
-            else ""
-        )
+        cost = f"{WHITE}{w}{RST}{CYAN}⟲{RST} {WHITE}{g}{RST}{GREY}⛭{RST} {WHITE}{m}{RST}{RED}⚈{RST}" if any((w, g, m)) else ""
         desc = getattr(a, "text", None) or ""
         line = f"{j}: {nm}"
         if cost:
