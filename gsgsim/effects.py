@@ -1,45 +1,77 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping
+from typing import Mapping
 
 
-def _to_targets(targets: Any) -> list:
-    if targets is None:
+def _to_list(x):
+    if not x:
         return []
-    if isinstance(targets, (list, tuple, set)):
-        return list(targets)
-    return [targets]
+    return list(x) if isinstance(x, (list, tuple, set)) else [x]
 
 
-def op_mark(gs: Any, source: Any, targets: Iterable[Any], spec: Mapping[str, Any]) -> bool:
-    """Mark each target with .marked = True. If no targets provided, mark source."""
-    ts = list(targets) or [source]
+def op_mark(gs, source, targets, spec):
+    ts = _to_list(targets) or [source]
     for t in ts:
         setattr(t, "marked", True)
     return True
 
 
+def op_shield(gs, source, targets, spec):
+    n = int(spec.get("n", 0) or 0)
+    ts = _to_list(targets) or [source]
+    for t in ts:
+        cur = int(getattr(t, "shield", 0) or 0)
+        setattr(t, "shield", cur + n)
+    return True
+
+
+def op_damage(gs, source, targets, spec):
+    n = int(spec.get("n", 0) or 0)
+    if n <= 0:
+        return False
+    ts = targets if targets else [source]
+    for t in ts:
+        d = n
+        sh = int(getattr(t, "shield", 0) or 0)
+        use = min(sh, d)
+        if use:
+            setattr(t, "shield", sh - use)
+            d -= use
+        if d > 0:
+            cur = int(getattr(t, "damage", 0) or 0)
+            setattr(t, "damage", cur + d)
+    return True
+
+
+def op_draw(gs, source, targets, spec):
+    n = int(spec.get("n", 0) or 0)
+    if n <= 0:
+        return False
+    player = getattr(gs, "turn_player", None)
+    draw = getattr(gs, "draw", None)
+    if callable(draw) and player is not None:
+        draw(player, n)
+        return True
+    return False
+
+
 _OPS = {
     "mark": op_mark,
+    "shield": op_shield,
+    "damage": op_damage,
+    "draw": op_draw,
 }
 
 
-def run_effect(gs: Any, source: Any, targets: Iterable[Any], spec: Mapping[str, Any]) -> bool:
-    """Run a single effect spec: {"op": "mark", ...}"""
+def run_effect(gs, source, targets, spec):
     if not isinstance(spec, Mapping):
         return False
-    op = str(spec.get("op", "")).lower()
-    fn = _OPS.get(op)
-    if not fn:
-        # unknown op -> refuse (safe default)
-        return False
-    return bool(fn(gs, source, targets, spec))
+    fn = _OPS.get(str(spec.get("op", "")).lower())
+    return bool(fn and fn(gs, source, _to_list(targets), spec))
 
 
-def run_effects(gs: Any, source: Any, targets: Iterable[Any] | None, effects: Iterable[Mapping[str, Any]]) -> bool:
-    """Run a sequence of effects; all must succeed."""
-    ts = _to_targets(targets)
+def run_effects(gs, source, targets, effects):
     ok = True
     for spec in effects or []:
-        ok = run_effect(gs, source, ts, spec) and ok
+        ok = run_effect(gs, source, targets, spec) and ok
     return ok

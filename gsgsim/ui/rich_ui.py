@@ -20,6 +20,10 @@ def rank_icon(card: Card) -> str:
     return "?"
 
 
+def cost_str(card):
+    return f"{getattr(card, 'deploy_wind', 0)}⟲ {getattr(card, 'deploy_gear', 0)}⛭ {getattr(card, 'deploy_meat', 0)}⚈"
+
+
 class RichUI:
     def __init__(self) -> None:
         self.console = Console()
@@ -35,10 +39,8 @@ class RichUI:
 
     def render(self, gs: GameState) -> None:
         c = self.console
-        # Header
         c.print(f"Turn {gs.turn_number} | Player: {'P1' if gs.turn_player is gs.p1 else 'P2'}")
 
-        # Board view (both sides)
         def board_table(title: str, player) -> Table:
             t = Table(title=title)
             t.add_column("#", justify="right", style="cyan")
@@ -48,7 +50,12 @@ class RichUI:
             t.add_column("Abilities")
             for i, card in enumerate(getattr(player, "board", [])):
                 abil = getattr(card, "abilities", [])
-                abil_txt = ", ".join(f"{idx}:{name}" for idx, name in enumerate(abil)) if abil else "-"
+                # allow abilities to be strings or objects with .name
+                names = []
+                for idx, a in enumerate(abil or []):
+                    n = getattr(a, "name", a)
+                    names.append(f"{idx}:{n}")
+                abil_txt = ", ".join(names) if names else "-"
                 t.add_row(
                     str(i),
                     getattr(card, "name", "?"),
@@ -61,14 +68,13 @@ class RichUI:
         c.print(board_table("Board P1", gs.p1))
         c.print(board_table("Board P2", gs.p2))
 
-        # Hand for current and opponent (like your previous UI)
         def hand_table(title: str, player) -> Table:
             t = Table(title=f"{title} hand ({len(player.hand)})")
             t.add_column("#", justify="right", style="cyan")
             t.add_column("Name")
             t.add_column("Cost")
             for i, card in enumerate(player.hand):
-                cost = f"{getattr(card, 'deploy_wind', 0)}⟲ {getattr(card, 'deploy_gear', 0)}⛭ {getattr(card, 'deploy_meat', 0)}⚈"
+                cost = cost_str(card)
                 t.add_row(str(i), getattr(card, "name", "?"), cost)
             return t
 
@@ -88,12 +94,16 @@ class RichUI:
                 line = self.console.input("> ").strip()
             except Exception:
                 break
+
             if line in ("quit", "q"):
                 break
             if line in ("end", "e"):
                 end_of_turn(gs)
                 continue
+
             parts = line.split()
+
+            # ability use: u SRC ABIL [TARGETSPEC]
             if len(parts) >= 3 and parts[0] == "u" and parts[1].isdigit() and parts[2].isdigit():
                 src = int(parts[1])
                 abil = int(parts[2])
@@ -101,7 +111,7 @@ class RichUI:
                 use_ability_cli(gs, src, abil, spec)
                 continue
 
-            # manual wind payment
+            # manual wind payment: pay AMOUNT p1|p2:idx[xN][,idx[xM] ...] [force]
             if parts and parts[0] == "pay" and len(parts) >= 3 and parts[1].isdigit():
                 amount = int(parts[1])
                 spec = " ".join(parts[2:])
@@ -109,4 +119,12 @@ class RichUI:
 
                 pay_cli(gs, amount, spec)
                 continue
-            self.console.print("commands: help | quit(q) | end(e) | dN | ddN | u <src> <abil> [p1|p2:idx[,idx]|all] | pay <amount> p1|p2:idxxN[,idxxM] [force]")
+
+            # minimal AI helper
+            if parts and parts[0] == "ai":
+                from ..ai import ai_take_turn
+
+                ai_take_turn(gs)
+                continue
+
+            self.console.print("commands: help | quit(q) | end(e) | dN | ddN | " "u <src> <abil> [p1|p2:idx[,idx]|all] | " "pay <amount> p1|p2:idxxN[,idxxM] [force] | ai")

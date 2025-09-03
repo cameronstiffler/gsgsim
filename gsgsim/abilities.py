@@ -118,3 +118,10 @@ def _diag_grim_0(gs, card, targets):
     except Exception:
         pass
     return True
+
+
+@registers("Target Marker Probe", 0)
+def _tmp_mark(gs, card, targets):
+    from .effects import run_effects
+
+    return bool(run_effects(gs, card, targets, [{"op": "mark"}]))
