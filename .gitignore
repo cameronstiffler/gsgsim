@@ -55,3 +55,9 @@ __pycache__/
 __pycache__/
 *.patch
 *.zip
+
+# backup artifacts
+*.bak.*
+*.bak
+*.orig
+*.rej
