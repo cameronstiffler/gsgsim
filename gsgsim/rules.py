@@ -1,31 +1,70 @@
 from __future__ import annotations
 
-from .models import Card, Player
 
-
-def apply_wind_with_resist(attacker_owner: Player, defender_owner: Player, target: Card, amount: int) -> int:
-    if amount <= 0:
-        return 0
-    is_enemy = attacker_owner is not defender_owner
-    has_resist = bool(target.statuses.get("resist")) if isinstance(target.statuses, dict) else False
-    reduction = 1 if (is_enemy and has_resist) else 0
-    actual = max(0, amount - reduction)
-    target.wind = getattr(target, "wind", 0) + actual
-    return actual
-
-
-def destroy_if_needed(owner: Player, card: Card) -> None:
-    """
-    Retire card when wind >= 4. Remove from board, append to owner's retired pile.
-    Idempotent if called multiple times.
-    """
-    if getattr(card, "wind", 0) >= 4:
-        if card in owner.board:
+def _retire_card(gs, card) -> None:
+    owner = None
+    if hasattr(gs, "p1") and card in getattr(gs.p1, "board", []):
+        owner = gs.p1
+    elif hasattr(gs, "p2") and card in getattr(gs.p2, "board", []):
+        owner = gs.p2
+    if owner:
+        try:
             owner.board.remove(card)
-        if card not in owner.retired:
-            owner.retired.append(card)
+        except ValueError:
+            pass
+        owner.retired.append(card)
 
 
-def can_target_card(src: Card, tgt: Card) -> bool:
-    # Extend later with Cover/Immunity/etc.
-    return True
+def destroy_if_needed(gs, card) -> bool:
+    """
+    Ensure a card at 4+ wind is retired. Return True iff card was retired.
+    Idempotent; safe to call anytime after wind changes.
+    """
+    try:
+        w = int(getattr(card, "wind", 0) or 0)
+    except Exception:
+        w = 0
+    if w >= 4:
+        _retire_card(gs, card)
+        return True
+    return False
+
+
+def apply_wind(gs, card, delta: int) -> int:
+    """
+    Add/remove wind by delta (can be negative). Retire immediately at >= 4 wind.
+    Return the applied delta.
+    """
+    old = int(getattr(card, "wind", 0) or 0)
+    new = max(0, old + int(delta))
+    card.wind = new
+    if new >= 4:
+        _retire_card(gs, card)
+    return new - old
+
+
+def cannot_spend_wind(card) -> bool:
+    """
+    A goon cannot spend wind if it's newly deployed (🔒) or explicitly locked.
+    """
+    return bool(getattr(card, "just_deployed", False) or getattr(card, "cannot_spend_wind", False))
+
+
+def apply_wind_with_resist(gs, card, delta: int, *, hostile: bool = False) -> int:
+    """
+    Like apply_wind, but if this is hostile wind and the target has resist,
+    reduce the incoming positive delta by 1 (to a minimum of 0).
+    """
+    has_resist = bool(
+        getattr(card, "resist", False)
+        or getattr(card, "has_resist", False)
+        or (
+            hasattr(card, "icons")
+            and card.icons
+            and any(str(x).strip().lower() == "resist" for x in card.icons)
+        )
+    )
+    eff = delta
+    if hostile and delta > 0 and has_resist:
+        eff = max(0, delta - 1)
+    return apply_wind(gs, card, eff)

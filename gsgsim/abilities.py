@@ -104,7 +104,10 @@ def _lokar_resourceful(gs, card, targets):
 def _diag_lokar_simmons_0(gs, card, targets):
     # DIAGNOSTIC ONLY: succeed to verify cost/flow; replace with real effect later
     try:
-        print("[diag] RESOURCEFUL fired; targets=", [getattr(t, "name", None) for t in (targets or [])])
+        print(
+            "[diag] RESOURCEFUL fired; targets=",
+            [getattr(t, "name", None) for t in (targets or [])],
+        )
     except Exception:
         pass
     return True
@@ -114,7 +117,10 @@ def _diag_lokar_simmons_0(gs, card, targets):
 def _diag_grim_0(gs, card, targets):
     # DIAGNOSTIC ONLY: cost 0, immediate success
     try:
-        print("[diag] DEFY NATURE fired; targets=", [getattr(t, "name", None) for t in (targets or [])])
+        print(
+            "[diag] DEFY NATURE fired; targets=",
+            [getattr(t, "name", None) for t in (targets or [])],
+        )
     except Exception:
         pass
     return True

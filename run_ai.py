@@ -39,7 +39,9 @@ def get_ui(name: str):
 def main(argv=None):
     p = argparse.ArgumentParser(description="GSGSim launcher with optional AI player.")
     p.add_argument("--ui", default="rich", choices=["rich", "term"], help="UI to use")
-    p.add_argument("--ai", default=None, choices=["p1", "p2"], help="Make p1 or p2 controlled by AI")
+    p.add_argument(
+        "--ai", default=None, choices=["p1", "p2"], help="Make p1 or p2 controlled by AI"
+    )
     args = p.parse_args(argv)
 
     init_game = get_init_game()

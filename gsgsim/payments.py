@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Callable, List, Optional, Tuple
 
 from .models import Card, Player
+from .rules import apply_wind
 
 # Chooser: UI-provided callback that gets (eligible, total_cost) and returns a plan [(idx, amt), ...]
 Chooser = Callable[[List[Tuple[int, Card, int]], int], Optional[List[Tuple[int, int]]]]
@@ -27,7 +28,9 @@ def _eligible_with_caps(player: Player) -> List[Tuple[int, Card, int]]:
     return out
 
 
-def _auto_plan(eligible: List[Tuple[int, Card, int]], total_cost: int) -> Optional[List[Tuple[int, int]]]:
+def _auto_plan(
+    eligible: List[Tuple[int, Card, int]], total_cost: int
+) -> Optional[List[Tuple[int, int]]]:
     """
     Greedy auto plan that:
       1) Prefers non-SL payers first.
@@ -85,7 +88,7 @@ def _auto_plan(eligible: List[Tuple[int, Card, int]], total_cost: int) -> Option
     return None
 
 
-def distribute_wind(player: Player, total_cost: int, chooser: Optional[Chooser] = None) -> bool:
+def distribute_wind(gs, player: Player, total_cost: int, chooser: Optional[Chooser] = None) -> bool:
     """
     Apply wind payments on player's board to cover total_cost.
     Returns True if cost fully paid and wind applied, False otherwise.
@@ -114,12 +117,14 @@ def distribute_wind(player: Player, total_cost: int, chooser: Optional[Chooser] 
     # Apply plan
     for board_idx, amt in plan:
         card = player.board[board_idx]
-        card.wind = getattr(card, "wind", 0) + amt
+        apply_wind(gs, card, amt)
 
     return True
 
 
-def manual_pay(player, total: int, plan: list[tuple[int, int]], allow_lethal_sl: bool = False) -> bool:
+def manual_pay(
+    player, total: int, plan: list[tuple[int, int]], allow_lethal_sl: bool = False
+) -> bool:
     if total <= 0:
         return False
     if sum(max(0, a) for _, a in plan) != total:
@@ -129,7 +134,9 @@ def manual_pay(player, total: int, plan: list[tuple[int, int]], allow_lethal_sl:
 
     def is_sl(card):
         r = getattr(card, "rank", "")
-        return (isinstance(r, str) and r.upper() == "SL") or (hasattr(r, "name") and str(r.name).upper() == "SL")
+        return (isinstance(r, str) and r.upper() == "SL") or (
+            hasattr(r, "name") and str(r.name).upper() == "SL"
+        )
 
     try:
         for idx, amt in plan:

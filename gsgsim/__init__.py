@@ -1,13 +1,7 @@
 # === IMPORT SENTRY (do not move/duplicate) ===
 from __future__ import annotations
 
-from .engine import (
-    deploy_from_hand,
-    end_of_turn,
-    select_ui,
-    start_of_turn,
-    use_ability_cli,
-)
+from .engine import deploy_from_hand, end_of_turn, select_ui, start_of_turn, use_ability_cli
 from .loader import build_cards, find_squad_leader, load_deck_json, parse_rank
 
 # Convenient entrypoint
