@@ -20,7 +20,7 @@
         "cost": [
           "1w"
         ],
-        "text": "Target goon does not unwind in players next unwind phase"
+        "text": "Target goon does not unwind in its next unwind phase"
       }
     ],
     "image_url_mini": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/mini/auditon.jpg",
@@ -40,7 +40,7 @@
       "resist",
       "no_unwind"
     ],
-    "requirements": "Player must control 2 Goons with the diamond icon to deploy",
+    "requirements": "Player must control 2 Squad Goons to deploy Bruut Enforcer",
     "abilities": [
       {
         "name": "SLUG",

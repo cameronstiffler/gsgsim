@@ -1,6 +1,6 @@
 
 
-GOON SQUAD GALAXY – FINAL RULES
+GOON SQUAD GALAXY – GAME SIMULATOR RULES
 
 1. Game Overview
 In Cosmic Horror in Goon Squad Galaxy, each player commands a squad of GOONs—grotesque monsters, alien machines, and freakish leaders—battling for survival across a ruined cosmos.
@@ -37,7 +37,11 @@ At the start of your turn, each GOON card unwinds to remove 1 Wind.
 
 
 -------
+OBJECTIVE
+Destroy opposing team's GOONs by targeting them with GOON abilities that wind them up. One field is clear of their GOONs,  destroy their Squad Leader to win.
 
+STRATEGY
+Target enemy GOONs with multiple GOONs' abilities in a turn to increase enemy wind to 4 which destroys them. Focus on destroying enemy GOONs.
 
 WIND SYSTEM
 
