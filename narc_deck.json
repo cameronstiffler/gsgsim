@@ -29,6 +29,7 @@
   {
     "name": "Bruut Enforcer",
     "rank": "Squad Goon",
+    "resist": true,
     "faction": "narc",
     "duplicates": "4",
     "deploy_cost": [
@@ -66,6 +67,7 @@
   {
     "name": "Buzzkill",
     "rank": "Squad Goon",
+    "resist": true,
     "faction": "narc",
     "duplicates": "4",
     "deploy_cost": [
@@ -185,6 +187,7 @@
   {
     "name": "Killjoy",
     "rank": "Squad Goon",
+    "resist": true,
     "faction": "narc",
     "duplicates": "4",
     "deploy_cost": [
@@ -224,6 +227,7 @@
   {
     "name": "Lokar Simmons",
     "rank": "Squad Leader",
+    "resist": true,
     "faction": "narc",
     "duplicates": "1",
     "deploy_cost": [],

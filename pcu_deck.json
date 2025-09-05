@@ -99,6 +99,7 @@
   {
     "name": "Grim",
     "rank": "Squad Leader",
+    "resist": true,
     "faction": "pcu",
     "duplicates": "4",
     "deploy_cost": [],
@@ -178,6 +179,7 @@
   {
     "name": "Krax",
     "rank": "Squad Goon",
+    "resist": true,
     "faction": "pcu",
     "duplicates": "4",
     "deploy_cost": [
@@ -210,6 +212,7 @@
   {
     "name": "Kriegsgheist",
     "rank": "Basic Goon",
+    "resist": true,
     "faction": "pcu",
     "duplicates": "4",
     "deploy_cost": [

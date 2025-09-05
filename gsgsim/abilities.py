@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .payments import distribute_wind
 
 from typing import Callable, Dict, Tuple
 
@@ -51,9 +52,7 @@ def use_ability(gs, card, idx: int, targets: list | None = None) -> bool:
         owner = getattr(gs, "turn_player", None)
         if owner is None:
             return False
-        from .payments import distribute_wind
-
-        if not distribute_wind(owner, wind_cost):
+        if not distribute_wind(owner, wind_cost, gs=gs):
             return False
 
     # Prefer effect specs if present; else use registry handler

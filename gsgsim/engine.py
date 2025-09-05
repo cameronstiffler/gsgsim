@@ -27,7 +27,7 @@ def deploy_from_hand(
         return False
 
     # Pay wind
-    if not distribute_wind(gs, player, wind_cost, chooser=chooser):
+    if not distribute_wind(player, wind_cost, gs=gs, chooser=chooser):
         print("refused: paying wind would require lethal SL payment or no eligible payers")
         # fallback: if only SL can pay, force SL payment of the full wind cost
         try:

@@ -154,3 +154,59 @@ def manual_pay(
                 pass
         return False
     return True
+
+def distribute_wind(player, total_cost, *, auto=True, gs=None, chooser=None):
+    """
+    Pay `total_cost` wind from player's board (all-or-nothing).
+      - Prefer non-SL first, then safe SL (won't push SL to 4).
+      - If `gs` provided, route via rules.apply_wind/destroy_if_needed to trigger retire.
+    """
+    if total_cost is None:
+        return True
+    try:
+        total_cost = int(total_cost)
+    except Exception:
+        return False
+    if total_cost <= 0:
+        return True
+
+    from .rules import apply_wind, destroy_if_needed, cannot_spend_wind
+
+    def is_sl(card):
+        r = getattr(card, "rank", None)
+        if isinstance(r, str):
+            return r.upper() == "SL"
+        return getattr(r, "name", "").upper() == "SL"
+
+    board = list(getattr(player, "board", []))
+
+    def capacity(card):
+        if cannot_spend_wind(None, card) or getattr(card, "new_this_turn", False):
+            return 0
+        w = int(getattr(card, "wind", 0) or 0)
+        if is_sl(card):
+            return max(0, 3 - w)  # never push SL to 4
+        return max(0, 4 - w)
+
+    order = [c for c in board if not is_sl(c) and capacity(c) > 0] +             [c for c in board if is_sl(c) and capacity(c) > 0]
+
+    need = total_cost
+    plan = []
+    for c in order:
+        take = min(capacity(c), need)
+        if take > 0:
+            plan.append((c, take))
+            need -= take
+            if need == 0:
+                break
+
+    if need > 0:
+        return False
+
+    for card, take in plan:
+        if gs is not None:
+            apply_wind(gs, card, +take)
+            destroy_if_needed(gs, card)
+        else:
+            setattr(card, "wind", int(getattr(card, "wind", 0)) + int(take))
+    return True

@@ -43,12 +43,12 @@ def apply_wind(gs, card, delta: int) -> int:
     return new - old
 
 
-def cannot_spend_wind(card) -> bool:
+def cannot_spend_wind(gs, card) -> bool:
     """
-    A goon cannot spend wind if it's newly deployed (🔒) or explicitly locked.
+    New-deploy lock: cannot spend wind / use abilities this turn.
+    `gs` is accepted (may be None) for consistency with callers.
     """
     return bool(getattr(card, "just_deployed", False) or getattr(card, "cannot_spend_wind", False))
-
 
 def apply_wind_with_resist(gs, card, delta: int, *, hostile: bool = False) -> int:
     """

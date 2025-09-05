@@ -27,7 +27,7 @@ def parse_rank(text: str | None) -> Rank:
     return map_.get(t, Rank.BG)
 
 
-def build_cards(deck_obj: Dict[str, Any], *, faction: Optional[str] = None) -> List[Card]:
+def build_cards(deck_obj: Dict[str, Any], faction: Optional[str] = None) -> List[Card]:
     cards: List[Card] = []
     for raw in deck_obj.get("goons", []):
         raw = _normalize_card_flags(raw, default_faction=faction)
