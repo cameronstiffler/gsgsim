@@ -26,7 +26,10 @@ def main():
         check_file(p)
     if FAILS:
         for fn, name in FAILS:
-            print(f"[rules-import-unused] {fn}: '{name}' imported from .rules but not used", file=sys.stderr)
+            print(
+                f"[rules-import-unused] {fn}: '{name}' imported from .rules but not used",
+                file=sys.stderr,
+            )
         sys.exit(1)
 
 

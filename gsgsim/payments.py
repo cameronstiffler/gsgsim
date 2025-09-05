@@ -28,7 +28,9 @@ def _eligible_with_caps(player: Player) -> List[Tuple[int, Card, int]]:
     return out
 
 
-def _auto_plan(eligible: List[Tuple[int, Card, int]], total_cost: int) -> Optional[List[Tuple[int, int]]]:
+def _auto_plan(
+    eligible: List[Tuple[int, Card, int]], total_cost: int
+) -> Optional[List[Tuple[int, int]]]:
     """
     Greedy auto plan that:
       1) Prefers non-SL payers first.
@@ -120,7 +122,9 @@ def distribute_wind(gs, player: Player, total_cost: int, chooser: Optional[Choos
     return True
 
 
-def manual_pay(player, total: int, plan: list[tuple[int, int]], allow_lethal_sl: bool = False) -> bool:
+def manual_pay(
+    player, total: int, plan: list[tuple[int, int]], allow_lethal_sl: bool = False
+) -> bool:
     if total <= 0:
         return False
     if sum(max(0, a) for _, a in plan) != total:
@@ -130,7 +134,9 @@ def manual_pay(player, total: int, plan: list[tuple[int, int]], allow_lethal_sl:
 
     def is_sl(card):
         r = getattr(card, "rank", "")
-        return (isinstance(r, str) and r.upper() == "SL") or (hasattr(r, "name") and str(r.name).upper() == "SL")
+        return (isinstance(r, str) and r.upper() == "SL") or (
+            hasattr(r, "name") and str(r.name).upper() == "SL"
+        )
 
     try:
         for idx, amt in plan:

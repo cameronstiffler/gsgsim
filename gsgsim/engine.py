@@ -10,7 +10,9 @@ from .rules import cannot_spend_wind
 Chooser = Callable[[List[Tuple[int, object, int]], int], Optional[List[Tuple[int, int]]]]
 
 
-def deploy_from_hand(gs: GameState, player: Player, hand_idx: int, chooser: Optional[Chooser] = None) -> bool:
+def deploy_from_hand(
+    gs: GameState, player: Player, hand_idx: int, chooser: Optional[Chooser] = None
+) -> bool:
     if hand_idx < 0 or hand_idx >= len(player.hand):
         print("invalid hand index")
         return False
@@ -39,10 +41,16 @@ def deploy_from_hand(gs: GameState, player: Player, hand_idx: int, chooser: Opti
             sl_idx = None
             for i, c2 in enumerate(getattr(player, "board", [])):
                 rnk = getattr(c2, "rank", "")
-                if (isinstance(rnk, str) and rnk.upper() == "SL") or (hasattr(rnk, "name") and str(rnk.name).upper() == "SL"):
+                if (isinstance(rnk, str) and rnk.upper() == "SL") or (
+                    hasattr(rnk, "name") and str(rnk.name).upper() == "SL"
+                ):
                     sl_idx = i
                     break
-            if sl_idx is not None and cw > 0 and manual_pay(player, cw, [(sl_idx, cw)], allow_lethal_sl=True):
+            if (
+                sl_idx is not None
+                and cw > 0
+                and manual_pay(player, cw, [(sl_idx, cw)], allow_lethal_sl=True)
+            ):
                 print("auto-pay fallback: forced SL payment accepted")
             else:
                 return False
@@ -80,7 +88,11 @@ def use_ability_cli(gs, src_idx: int, abil_idx: int, target_spec: str | None = N
         return
     targets = parse_targets(target_spec or "", gs)
     ok = use_ability(gs, card, abil_idx, targets)
-    print("ability ok" if ok else f'ability failed (passive/new/handler/cost): {getattr(card, "name", "<??>")} [{abil_idx}]')
+    print(
+        "ability ok"
+        if ok
+        else f'ability failed (passive/new/handler/cost): {getattr(card, "name", "<??>")} [{abil_idx}]'
+    )
     return
 
 
@@ -201,7 +213,9 @@ def manual_pay(gs, total: int, targets: list[tuple[str, int]]) -> bool:
             add_wind_and_check(gs, c, +1)
             paid += 1
             progressed = True
-            if (c in getattr(gs.p1, "board", []) or c in getattr(gs.p2, "board", [])) and not cannot_spend_wind(c):
+            if (
+                c in getattr(gs.p1, "board", []) or c in getattr(gs.p2, "board", [])
+            ) and not cannot_spend_wind(c):
                 next_pool.append(c)
             if paid >= total:
                 break

@@ -55,7 +55,15 @@ def apply_wind_with_resist(gs, card, delta: int, *, hostile: bool = False) -> in
     Like apply_wind, but if this is hostile wind and the target has resist,
     reduce the incoming positive delta by 1 (to a minimum of 0).
     """
-    has_resist = bool(getattr(card, "resist", False) or getattr(card, "has_resist", False) or (hasattr(card, "icons") and card.icons and any(str(x).strip().lower() == "resist" for x in card.icons)))
+    has_resist = bool(
+        getattr(card, "resist", False)
+        or getattr(card, "has_resist", False)
+        or (
+            hasattr(card, "icons")
+            and card.icons
+            and any(str(x).strip().lower() == "resist" for x in card.icons)
+        )
+    )
     eff = delta
     if hostile and delta > 0 and has_resist:
         eff = max(0, delta - 1)
