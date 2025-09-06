@@ -1,31 +1,92 @@
 repos:
-- repo: https://github.com/psf/black
-  rev: 24.4.2
-  hooks: [{id: black}]
-- repo: https://github.com/pycqa/isort
-  rev: 5.13.2
-  hooks: [{id: isort}]
-- repo: https://github.com/pycqa/flake8
-  rev: 7.0.0
-  hooks: [{id: flake8}]
-- repo: local
-  hooks:
-    - id: smoke
-      name: gsgsim smoke
-      entry: scripts/smoke.sh
-      language: system
-      pass_filenames: false
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        args: ["--line-length", "200"]
+        exclude: '(^\.venv/|^dist/|^build/|^scripts/|(^|.*/)?site-packages/|\.bak$)'
 
-repos:
-- repo: local
-  hooks:
-    - id: check-rules-import-usage
-      name: check rules imports are used
-      entry: scripts/check_rules_import_usage.py
-      language: system
-      pass_filenames: false
-    - id: ban-deprecated-symbols
-      name: ban deprecated symbols
-      entry: scripts/check_deprecated_symbols.sh
-      language: system
-      pass_filenames: false
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        exclude: '(^\.venv/|^dist/|^build/|^scripts/|(^|.*/)?site-packages/|\.bak$)'
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+        exclude: '(^\.venv/|^dist/|^build/|^scripts/|(^|.*/)?site-packages/|\.bak$)'
+
+  - repo: local
+    hooks:
+      - id: smoke
+        name: gsgsim smoke
+        entry: scripts/smoke.sh
+        language: system
+        pass_filenames: false
+
+      - id: check-rules-import-usage
+        name: check rules imports are used
+        entry: scripts/check_rules_import_usage.py
+        language: system
+        pass_filenames: false
+
+      - id: ban-deprecated-symbols
+        name: ban deprecated symbols
+        entry: scripts/check_deprecated_symbols.sh
+        language: system
+        pass_filenames: false
+
+      - id: no-combined-imports
+        name: no-combined-imports
+        language: system
+        pass_filenames: false
+        entry: >
+          bash -lc 'set -euo pipefail;
+          PAT="^from[[:space:]]+[^[:space:]]+[[:space:]]+import[[:space:]]+[^,#\n]+,[[:space:]]*[^#\n]+$";
+          files="$(git ls-files -z -- "*.py")";
+          if [ -n "$files" ] && printf "%s" "$files" | xargs -0 grep -En "$PAT" >/dev/null 2>&1; then
+            echo "ERROR: combined imports are disallowed";
+            printf "%s" "$files" | xargs -0 grep -EnH "$PAT" || true;
+            exit 1;
+          fi'
+
+      - id: no-apply-wind-outside-rules
+        name: no-apply-wind-outside-rules
+        language: system
+        pass_filenames: false
+        entry: >
+          bash -lc 'set -euo pipefail;
+          files="$(git ls-files -z -- gsgsim/**/*.py | xargs -0 -I{} echo {} | grep -v "^gsgsim/rules\.py$" | tr "\n" "\0")";
+          if [ -n "$files" ] && printf "%s" "$files" | xargs -0 grep -En "^def[[:space:]]+apply_wind" >/dev/null 2>&1; then
+            echo "ERROR: apply_wind* must live only in gsgsim/rules.py";
+            printf "%s" "$files" | xargs -0 grep -En "^def[[:space:]]+apply_wind" || true;
+            exit 1;
+          fi'
+
+      - id: no-distribute-wind-outside-payments
+        name: no-distribute-wind-outside-payments
+        language: system
+        pass_filenames: false
+        entry: >
+          bash -lc 'set -euo pipefail;
+          files="$(git ls-files -z -- gsgsim/**/*.py | xargs -0 -I{} echo {} | grep -v "^gsgsim/payments\.py$" | tr "\n" "\0")";
+          if [ -n "$files" ] && printf "%s" "$files" | xargs -0 grep -En "^def[[:space:]]+distribute_wind" >/dev/null 2>&1; then
+            echo "ERROR: distribute_wind must live only in gsgsim/payments.py";
+            printf "%s" "$files" | xargs -0 grep -En "^def[[:space:]]+distribute_wind" || true;
+            exit 1;
+          fi'
+
+      - id: no-syspath-in-tests
+        name: no-syspath-in-tests
+        language: system
+        pass_filenames: false
+        entry: >
+          bash -lc 'set -euo pipefail;
+          files="$(git ls-files -z -- tests/**/*.py)";
+          if [ -n "$files" ] && printf "%s" "$files" | xargs -0 grep -En "sys\.path\.insert\(" >/dev/null 2>&1; then
+            echo "ERROR: sys.path edits belong in tests/conftest.py";
+            printf "%s" "$files" | xargs -0 grep -EnH "sys\.path\.insert\(" || true;
+            exit 1;
+          fi'

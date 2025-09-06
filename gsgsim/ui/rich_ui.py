@@ -3,7 +3,8 @@ from __future__ import annotations
 from rich.console import Console
 from rich.table import Table
 
-from ..models import Card, GameState
+from ..models import Card
+from ..models import GameState
 
 try:
     from .. import engine_rule_shim
@@ -157,14 +158,32 @@ class RichUI:
     def __init__(self) -> None:
         self.console = Console()
 
+    def _print_command_banner(self, cheats_enabled: bool = False) -> None:
+        banner = (
+            "[bold cyan]Goon Squad Galaxy Simulator[/bold cyan]\n"
+            "Commands: [bold]help[/bold] | [bold]quit[/bold](q) | [bold]end[/bold](e) | [bold]dN[/bold]|[bold]d N[/bold] | [bold]ddN[/bold]|[bold]dd N[/bold] | [bold]u <src> <abil>[/bold] | [bold]pay <amount> p1|p2:idx[,idx][/bold] | [bold]ai[/bold] [p1|p2]"  # noqa: E501
+        )
+        if cheats_enabled:
+            banner += " | [bold]kill[/bold] p1|p2 <idx> (k)"
+        banner += "\nStart flags: --ai p1|p2|both, --auto\nSee: gamerules.md"
+        self.console.print(banner)
+
     def _print_ai_banner(self) -> None:
         self.console.print(
-            """[bold]Tip:[/bold] Type [bold]ai[/bold] to have the [bold]current player[/bold] act once.
-Use [bold]ai p1[/bold] or [bold]ai p2[/bold] to target a side.
-Deploy with [bold]dN[/bold] or [bold]d N[/bold]; end turn with [bold]e[/bold] or [bold]end[/bold]."""
+            (
+                "[bold]Tip:[/bold] Type [bold]ai[/bold] to have the [bold]current player[/bold] act once.\n"
+                "Use [bold]ai p1[/bold] or [bold]ai p2[/bold] to target a side.\n"
+                "Deploy with [bold]dN[/bold] or [bold]d N[/bold]; end turn with [bold]e[/bold] or [bold]end[/bold]."
+            )
         )
 
     def _check_game_over(self, gs: GameState) -> bool:
+        # First, check for loser marked on GameState
+        if getattr(gs, "loser", None) is not None:
+            loser = gs.loser
+            winner = "P1" if loser == "P2" else "P2"
+            self.console.print(f"[bold]Game over! Winner: {winner}[/bold]")
+            return True
         if engine_rule_shim and hasattr(engine_rule_shim, "check_sl_loss"):
             loser = engine_rule_shim.check_sl_loss(gs)
             if loser is not None:
@@ -185,9 +204,7 @@ Deploy with [bold]dN[/bold] or [bold]d N[/bold]; end turn with [bold]e[/bold] or
             t.add_column("Abilities")
             for i, card in enumerate(getattr(player, "board", [])):
                 abil = getattr(card, "abilities", [])
-                abil_txt = (
-                    ", ".join(f"{idx}:{name}" for idx, name in enumerate(abil)) if abil else "-"
-                )
+                abil_txt = ", ".join(f"{idx}:{name}" for idx, name in enumerate(abil)) if abil else "-"
                 t.add_row(
                     str(i),
                     _name_with_icons(card, _resolve_faction(player, card)),
@@ -198,6 +215,12 @@ Deploy with [bold]dN[/bold] or [bold]d N[/bold]; end turn with [bold]e[/bold] or
 
         c.print(board_table("Board P1", gs.p1))
         c.print(board_table("Board P2", gs.p2))
+
+        # Dead Pool status line
+        dead = getattr(gs, "dead_pool", [])
+        bio_count = sum(1 for c in dead if getattr(c, "is_bio", False) or "biological" in getattr(c, "icons", []))
+        mech_count = sum(1 for c in dead if getattr(c, "is_mech", False) or "mechanical" in getattr(c, "icons", []))
+        c.print(f"Dead Pool 🥩:{bio_count} ⚙️:{mech_count}")
 
         def hand_table(title: str, player) -> Table:
             t = Table(title=f"{title} hand ({len(player.hand)})")
@@ -218,9 +241,15 @@ Deploy with [bold]dN[/bold] or [bold]d N[/bold]; end turn with [bold]e[/bold] or
             c.print(hand_table("P2", gs.p2))
 
     def run_loop(self, gs: GameState, ai_p1: bool = False, ai_p2: bool = False, auto: bool = False):
-        from ..ai import ai_take_turn
-        from ..engine import deploy_from_hand, end_of_turn, use_ability_cli
+        import os
 
+        from ..ai import ai_take_turn
+        from ..engine import deploy_from_hand
+        from ..engine import end_of_turn
+        from ..engine import use_ability_cli
+
+        cheats_enabled = os.environ.get("GSG_CHEATS") in ("1", "true", "on", "yes")
+        self._print_command_banner(cheats_enabled=cheats_enabled)
         self._print_ai_banner()
 
         while True:
@@ -229,9 +258,7 @@ Deploy with [bold]dN[/bold] or [bold]d N[/bold]; end turn with [bold]e[/bold] or
 
             self.render(gs)
 
-            if auto and (
-                (gs.turn_player is gs.p1 and ai_p1) or (gs.turn_player is gs.p2 and ai_p2)
-            ):
+            if auto and ((gs.turn_player is gs.p1 and ai_p1) or (gs.turn_player is gs.p2 and ai_p2)):
                 prev = gs.turn_player
                 ai_take_turn(gs)
                 if gs.turn_player is prev:
@@ -246,6 +273,62 @@ Deploy with [bold]dN[/bold] or [bold]d N[/bold]; end turn with [bold]e[/bold] or
                 break
 
             if not line:
+                continue
+
+            parts = line.split()
+
+            if line in ("help", "h"):
+                self._print_command_banner(cheats_enabled=cheats_enabled)
+                self._print_ai_banner()
+                if cheats_enabled:
+                    self.console.print("[bold]kill p1|p2 <idx>[/bold] (alias: k) — Instantly destroy a goon on the board by index.")
+                continue
+            if parts[0] in ("kill", "k"):
+                if not cheats_enabled:
+                    self.console.print("unknown command")
+                    continue
+                if len(parts) != 3 or parts[1] not in ("p1", "p2") or not parts[2].isdigit():
+                    self.console.print("Usage: kill p1|p2 <idx>")
+                    continue
+                side = gs.p1 if parts[1] == "p1" else gs.p2
+                idx = int(parts[2])
+                board = getattr(side, "board", [])
+                if idx < 0 or idx >= len(board):
+                    self.console.print("Invalid index for kill command.")
+                    continue
+                card = board[idx]
+                from ..rules import apply_wind
+                from ..rules import destroy_if_needed
+
+                cur = int(getattr(card, "wind", 0) or 0)
+                delta = max(0, 4 - cur)
+                if delta:
+                    apply_wind(gs, card, delta)
+                destroyed = destroy_if_needed(gs, card)
+                self.console.print(f"killed: {getattr(card, 'name','?')}" if destroyed else "no-op: not on board")
+                continue
+
+            if line in ("deadpool", "dp"):
+                dead = getattr(gs, "dead_pool", [])
+                if not dead:
+                    self.console.print("Dead Pool is empty.")
+                else:
+                    from rich.table import Table
+
+                    t = Table(title="Dead Pool")
+                    t.add_column("#", justify="right", style="cyan")
+                    t.add_column("Name")
+                    t.add_column("Icons")
+                    for i, card in enumerate(dead):
+                        # Reuse _name_with_icons for icons tail
+                        name_with_icons = _name_with_icons(card, getattr(card, "faction", None))
+                        # Split name and icons (assume icons are at the end)
+                        if " " in name_with_icons:
+                            name, icons = name_with_icons.split(" ", 1)
+                        else:
+                            name, icons = name_with_icons, ""
+                        t.add_row(str(i), name, icons)
+                    self.console.print(t)
                 continue
 
             if line in ("quit", "q", "exit"):
@@ -308,7 +391,5 @@ Deploy with [bold]dN[/bold] or [bold]d N[/bold]; end turn with [bold]e[/bold] or
                 continue
 
             self.console.print(
-                "commands: help | quit(q) | end(e) | dN|d N | ddN|dd N | "
-                "u <src> <abil> | pay <amount> p1|p2:idx[,idx] | ai [p1|p2]  "
-                "(start flags: --ai p1|p2|both, --auto)  See: gamerules.md"
+                "commands: help | quit(q) | end(e) | dN|d N | ddN|dd N | " "u <src> <abil> | pay <amount> p1|p2:idx[,idx] | ai [p1|p2]  " "(start flags: --ai p1|p2|both, --auto)  See: gamerules.md"
             )

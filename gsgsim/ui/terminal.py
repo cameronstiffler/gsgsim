@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 from typing import List
 
-from ..models import Card, GameState, Rank
+from ..models import Card
+from ..models import GameState
+from ..models import Rank
 
 WHITE = "\033[37m"
 CYAN = "\033[36m"
@@ -47,11 +49,7 @@ def ability_lines(c: Card) -> List[str]:
         w = int(getattr(a, "wind_cost", 0) or 0)
         g = int(getattr(a, "gear_cost", 0) or 0)
         m = int(getattr(a, "meat_cost", 0) or 0)
-        cost = (
-            f"{WHITE}{w}{RST}{CYAN}⟲{RST} {WHITE}{g}{RST}{GREY}⛭{RST} {WHITE}{m}{RST}{RED}⚈{RST}"
-            if any((w, g, m))
-            else ""
-        )
+        cost = f"{WHITE}{w}{RST}{CYAN}⟲{RST} {WHITE}{g}{RST}{GREY}⛭{RST} {WHITE}{m}{RST}{RED}⚈{RST}" if any((w, g, m)) else ""
         desc = getattr(a, "text", None) or ""
         line = f"{j}: {nm}"
         if cost:
@@ -82,7 +80,8 @@ class TerminalUI:
             print(f"[{i}] {name_with_icons(c):<20} {cost_str(c)}")
 
     def run_loop(self, gs: GameState):
-        from ..engine import deploy_from_hand, end_of_turn
+        from ..engine import deploy_from_hand
+        from ..engine import end_of_turn
 
         while True:
             if engine_rule_shim and engine_rule_shim.check_sl_loss(gs):

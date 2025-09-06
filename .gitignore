@@ -65,3 +65,10 @@ __pycache__/
 # editor/one-off backups
 *.bak.*
 scripts/*.bak.*
+
+# editor backups
+*.bak
+*~
+
+# virtual env
+.venv/

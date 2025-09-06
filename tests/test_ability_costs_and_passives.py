@@ -6,9 +6,7 @@ def mk_player(board):
 
 
 def mk_card(name, rank="BG", wind=0, new_this_turn=False, abilities=None):
-    return types.SimpleNamespace(
-        name=name, rank=rank, wind=wind, new_this_turn=new_this_turn, abilities=abilities or []
-    )
+    return types.SimpleNamespace(name=name, rank=rank, wind=wind, new_this_turn=new_this_turn, abilities=abilities or [])
 
 
 class Ability:
@@ -29,7 +27,8 @@ def test_passive_cannot_be_used(monkeypatch):
 
 def test_active_cost_enforced(monkeypatch):
     # Ability costs 2 wind: with only SL at wind 3, auto-pay should refuse
-    from gsgsim.abilities import registers, use_ability
+    from gsgsim.abilities import registers
+    from gsgsim.abilities import use_ability
 
     called = {"ok": False}
 
@@ -49,7 +48,8 @@ def test_active_cost_enforced(monkeypatch):
 
 
 def test_active_cost_succeeds_with_non_sl_sources(monkeypatch):
-    from gsgsim.abilities import registers, use_ability
+    from gsgsim.abilities import registers
+    from gsgsim.abilities import use_ability
 
     @registers("Probe2", 0)
     def _ok(gs, card, targets):

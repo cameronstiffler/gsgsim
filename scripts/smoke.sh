@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-python - <<'PY'
-from gsgsim.loader import load_deck_json, build_cards, find_squad_leader
-from gsgsim.models import Player, GameState
-from gsgsim.engine import start_of_turn, end_of_turn, deploy_from_hand
+python3 - <<'PY'
+from gsgsim.loader import load_deck_json
+from gsgsim.loader import build_cards
+from gsgsim.loader import find_squad_leader
+from gsgsim.models import Player
+from gsgsim.models import GameState
+from gsgsim.engine import start_of_turn
+from gsgsim.engine import end_of_turn
+from gsgsim.engine import deploy_from_hand
 from gsgsim.rules import apply_wind
 
 # Build a tiny game state

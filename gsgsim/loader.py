@@ -3,9 +3,14 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
-from .models import Ability, Card, Rank
+from .models import Ability
+from .models import Card
+from .models import Rank
 
 
 def load_deck_json(path: str) -> Dict[str, Any]:

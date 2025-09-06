@@ -1,9 +1,11 @@
 from __future__ import annotations
-from .payments import distribute_wind
 
-from typing import Callable, Dict, Tuple
+from typing import Callable
+from typing import Dict
+from typing import Tuple
 
 from .effects import run_effects
+from .payments import distribute_wind
 
 # Minimal, UI-agnostic registry so we can wire abilities one by one.
 
@@ -31,13 +33,13 @@ def use_ability(gs, card, idx: int, targets: list | None = None) -> bool:
     except Exception:
         return False
 
-    # Determine if we have a registry handler up front
-    key = (getattr(card, "name", "").lower(), idx)
-    fn = REGISTRY.get(key)
-
     # Passive abilities cannot be actively used
     if getattr(ability, "passive", False):
         return False
+
+    # Determine if we have a registry handler up front
+    key = (getattr(card, "name", "").lower(), idx)
+    fn = REGISTRY.get(key)
 
     # If neither effects nor handler exist, fail before charging cost
     effects = getattr(ability, "effects", None) or []
@@ -45,7 +47,7 @@ def use_ability(gs, card, idx: int, targets: list | None = None) -> bool:
     if not has_exec:
         return False
 
-    # Pay wind cost only after we know the ability can execute
+    # Compute wind cost and pay before running handler/effects
     cost = getattr(ability, "cost", {}) or {}
     wind_cost = int(cost.get("wind", 0) or 0)
     if wind_cost > 0:
@@ -55,7 +57,7 @@ def use_ability(gs, card, idx: int, targets: list | None = None) -> bool:
         if not distribute_wind(owner, wind_cost, gs=gs):
             return False
 
-    # Prefer effect specs if present; else use registry handler
+    # Only then run handler or effects
     if effects:
         return bool(run_effects(gs, card, targets, effects))
     else:

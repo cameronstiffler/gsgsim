@@ -1,70 +1,102 @@
 from __future__ import annotations
 
-
-def _retire_card(gs, card) -> None:
-    owner = None
-    if hasattr(gs, "p1") and card in getattr(gs.p1, "board", []):
-        owner = gs.p1
-    elif hasattr(gs, "p2") and card in getattr(gs.p2, "board", []):
-        owner = gs.p2
-    if owner:
-        try:
-            owner.board.remove(card)
-        except ValueError:
-            pass
-        owner.retired.append(card)
-
-
-def destroy_if_needed(gs, card) -> bool:
-    """
-    Ensure a card at 4+ wind is retired. Return True iff card was retired.
-    Idempotent; safe to call anytime after wind changes.
-    """
-    try:
-        w = int(getattr(card, "wind", 0) or 0)
-    except Exception:
-        w = 0
-    if w >= 4:
-        _retire_card(gs, card)
-        return True
-    return False
+# Single source of truth for rule helpers.
+# NO imports from engine/UI/payments here.
 
 
 def apply_wind(gs, card, delta: int) -> int:
-    """
-    Add/remove wind by delta (can be negative). Retire immediately at >= 4 wind.
-    Return the applied delta.
-    """
-    old = int(getattr(card, "wind", 0) or 0)
-    new = max(0, old + int(delta))
-    card.wind = new
-    if new >= 4:
-        _retire_card(gs, card)
-    return new - old
+    """Adjust card.wind by delta (can be + or -). Returns the applied delta."""
+    try:
+        w0 = int(getattr(card, "wind", 0) or 0)
+    except Exception:
+        w0 = 0
+    d = int(delta or 0)
+    w1 = w0 + d
+    if w1 < 0:
+        w1 = 0
+        d = -w0
+    setattr(card, "wind", w1)
+    if gs is not None:
+        destroy_if_needed(gs, card)
+    return d
+
+
+def apply_wind_with_resist(gs, card, delta: int, *, hostile: bool) -> int:
+    """Hostile +1 is reduced by 1 if the card has resist; otherwise apply as-is."""
+    d = int(delta or 0)
+    if hostile and d > 0:
+        has_resist = bool(getattr(card, "resist", False) or "resist" in getattr(card, "traits", set()) or "resist" in getattr(card, "icons", []))
+        if has_resist and d == 1:
+            d = 0
+    return apply_wind(gs, card, d)
+
+
+def destroy_if_needed(gs, card) -> bool:
+    """Retire card at wind >= 4; push to dead_pool; return True if destroyed."""
+    try:
+        if int(getattr(card, "wind", 0) or 0) < 4:
+            return False
+    except Exception:
+        return False
+
+    owner = None
+    for side in (getattr(gs, "p1", None), getattr(gs, "p2", None)):
+        if side and card in getattr(side, "board", []):
+            owner = side
+            break
+    if owner:
+        # Remove all instances of card from board
+        while card in owner.board:
+            owner.board.remove(card)
+        try:
+            owner.retired.append(card)
+        except Exception:
+            pass
+
+    if not hasattr(gs, "dead_pool") or gs.dead_pool is None:
+        gs.dead_pool = []
+    gs.dead_pool.append(card)
+
+    # If the destroyed card is an SL, mark loser on GameState
+    try:
+        r = getattr(card, "rank", "")
+        r_name = getattr(getattr(card, "rank", None), "name", "")
+        is_sl = str(r).strip().upper() in ("SL", "SQUAD LEADER") or str(r_name).strip().upper() == "SL"
+        if is_sl and getattr(gs, "loser", None) is None:
+            loser = "P1" if owner is getattr(gs, "p1", None) else "P2"
+            gs.loser = loser
+    except Exception:
+        pass
+    return True
 
 
 def cannot_spend_wind(gs, card) -> bool:
-    """
-    New-deploy lock: cannot spend wind / use abilities this turn.
-    `gs` is accepted (may be None) for consistency with callers.
-    """
-    return bool(getattr(card, "just_deployed", False) or getattr(card, "cannot_spend_wind", False))
+    """Lock rule: newly deployed or explicit cannot_spend_wind status."""
+    return bool(getattr(card, "just_deployed", False) or getattr(card, "new_this_turn", False) or getattr(card, "cannot_spend_wind", False))
 
-def apply_wind_with_resist(gs, card, delta: int, *, hostile: bool = False) -> int:
-    """
-    Like apply_wind, but if this is hostile wind and the target has resist,
-    reduce the incoming positive delta by 1 (to a minimum of 0).
-    """
-    has_resist = bool(
-        getattr(card, "resist", False)
-        or getattr(card, "has_resist", False)
-        or (
-            hasattr(card, "icons")
-            and card.icons
-            and any(str(x).strip().lower() == "resist" for x in card.icons)
-        )
-    )
-    eff = delta
-    if hostile and delta > 0 and has_resist:
-        eff = max(0, delta - 1)
-    return apply_wind(gs, card, eff)
+
+def _rank_str(x) -> str:
+    r = getattr(x, "rank", "")
+    if isinstance(r, str):
+        return r.upper()
+    return str(getattr(r, "name", "")).upper()
+
+
+def can_target_card(gs, source, target, *, hostile: bool) -> bool:
+    """Hostile target gating: SL protected by BG/SG; Titans cannot be hostile-targeted."""
+    if not hostile:
+        return True
+    tr = _rank_str(target)
+    if tr in ("T", "TITAN"):
+        return False
+    is_sl = tr in ("SL", "SQUAD LEADER")
+    if is_sl:
+        side = getattr(gs, "p1", None) if target in getattr(getattr(gs, "p1", None), "board", []) else getattr(gs, "p2", None)
+        if side:
+            for c in getattr(side, "board", []):
+                if c is target:
+                    continue
+                rr = _rank_str(c)
+                if rr in ("BG", "BASIC GOON", "SG", "SQUAD GOON"):
+                    return False
+    return True

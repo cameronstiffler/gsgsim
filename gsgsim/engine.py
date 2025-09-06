@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-from typing import Callable, List, Optional, Tuple
+from typing import Callable
+from typing import List
+from typing import Optional
+from typing import Tuple
 
 from .abilities import use_ability
-from .models import GameState, Player
+from .models import GameState
+from .models import Player
 from .payments import distribute_wind
 from .rules import cannot_spend_wind
 
 Chooser = Callable[[List[Tuple[int, object, int]], int], Optional[List[Tuple[int, int]]]]
 
 
-def deploy_from_hand(
-    gs: GameState, player: Player, hand_idx: int, chooser: Optional[Chooser] = None
-) -> bool:
+def deploy_from_hand(gs: GameState, player: Player, hand_idx: int, chooser: Optional[Chooser] = None) -> bool:
     if hand_idx < 0 or hand_idx >= len(player.hand):
         print("invalid hand index")
         return False
@@ -28,49 +30,55 @@ def deploy_from_hand(
 
     # Pay wind
     if not distribute_wind(player, wind_cost, gs=gs, chooser=chooser):
-        print("refused: paying wind would require lethal SL payment or no eligible payers")
-        # fallback: if only SL can pay, force SL payment of the full wind cost
-        try:
-            from .payments import manual_pay
-
-            # determine wind cost from the card being deployed
-            try:
-                cw = int(getattr(card, "deploy_wind", 0) or 0)
-            except NameError:
-                cw = 0
-            sl_idx = None
-            for i, c2 in enumerate(getattr(player, "board", [])):
-                rnk = getattr(c2, "rank", "")
-                if (isinstance(rnk, str) and rnk.upper() == "SL") or (
-                    hasattr(rnk, "name") and str(rnk.name).upper() == "SL"
-                ):
-                    sl_idx = i
-                    break
-            if (
-                sl_idx is not None
-                and cw > 0
-                and manual_pay(player, cw, [(sl_idx, cw)], allow_lethal_sl=True)
-            ):
-                print("auto-pay fallback: forced SL payment accepted")
-            else:
-                return False
-        except Exception:
-            return False
+        return False
     # Move card to board
     player.board.append(card)
     player.hand.pop(hand_idx)
-    # initialize flags
-    if not hasattr(card, "wind"):
-        card.wind = 0
+    card.wind = 0
     card.new_this_turn = True
+    card.just_deployed = True
     return True
 
 
 def start_of_turn(gs: GameState) -> None:
-    # Clear new_this_turn on the ACTIVE player's board at the start of their turn
+    _clear_turn_locks(gs)
+    # Draw 1 for current player; lose if deck empty
     p = gs.turn_player
-    for c in getattr(p, "board", []):
-        c.new_this_turn = False
+    if hasattr(p, "deck") and isinstance(p.deck, list):
+        if not p.deck:
+            print(f"{p.name} loses: deck empty at draw step!")
+            return
+        card = p.deck.pop(0)
+        p.hand.append(card)
+    # Clear new_this_turn and just_deployed on both players' boards
+    # inside start_of_turn(gs), early in the function:
+
+    for side in (gs.p1, gs.p2):
+        for c in getattr(side, "board", []):
+            if getattr(c, "just_deployed", False):
+                c.just_deployed = False
+            if getattr(c, "new_this_turn", False):
+                c.new_this_turn = False
+            if getattr(c, "ability_used_this_turn", False):
+                c.ability_used_this_turn = False
+    # Auto-unwind only the current turn player's board, skipping no_unwind
+    from .rules import apply_wind
+
+    for c in gs.turn_player.board:
+        if getattr(c, "wind", 0) > 0 and not getattr(c, "no_unwind", False):
+            apply_wind(gs, c, -1)
+
+
+def _clear_turn_locks(gs):
+    # clear deploy/turn locks and per-turn flags (defensive: both sides)
+    for side in (gs.p1, gs.p2):
+        for c in getattr(side, "board", []):
+            if getattr(c, "just_deployed", False):
+                c.just_deployed = False
+            if getattr(c, "new_this_turn", False):
+                c.new_this_turn = False
+            if getattr(c, "ability_used_this_turn", False):
+                c.ability_used_this_turn = False
 
 
 def end_of_turn(gs: GameState) -> None:
@@ -88,11 +96,7 @@ def use_ability_cli(gs, src_idx: int, abil_idx: int, target_spec: str | None = N
         return
     targets = parse_targets(target_spec or "", gs)
     ok = use_ability(gs, card, abil_idx, targets)
-    print(
-        "ability ok"
-        if ok
-        else f'ability failed (passive/new/handler/cost): {getattr(card, "name", "<??>")} [{abil_idx}]'
-    )
+    print("ability ok" if ok else f'ability failed (passive/new/handler/cost): {getattr(card, "name", "<??>")} [{abil_idx}]')
     return
 
 
@@ -213,9 +217,7 @@ def manual_pay(gs, total: int, targets: list[tuple[str, int]]) -> bool:
             add_wind_and_check(gs, c, +1)
             paid += 1
             progressed = True
-            if (
-                c in getattr(gs.p1, "board", []) or c in getattr(gs.p2, "board", [])
-            ) and not cannot_spend_wind(c):
+            if (c in getattr(gs.p1, "board", []) or c in getattr(gs.p2, "board", [])) and not cannot_spend_wind(c):
                 next_pool.append(c)
             if paid >= total:
                 break

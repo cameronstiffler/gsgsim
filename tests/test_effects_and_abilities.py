@@ -6,9 +6,7 @@ def mk_player(board):
 
 
 def mk_card(name, rank="BG", wind=0, new_this_turn=False, abilities=None):
-    return types.SimpleNamespace(
-        name=name, rank=rank, wind=wind, new_this_turn=new_this_turn, abilities=abilities or []
-    )
+    return types.SimpleNamespace(name=name, rank=rank, wind=wind, new_this_turn=new_this_turn, abilities=abilities or [])
 
 
 class Ability:
@@ -36,9 +34,7 @@ def test_effect_mark_targets_without_registry(monkeypatch):
 def test_effect_mark_self_when_no_targets(monkeypatch):
     from gsgsim.abilities import use_ability
 
-    src = mk_card(
-        "SelfMarker", abilities=[Ability("MARK", cost={"wind": 0}, effects=[{"op": "mark"}])]
-    )
+    src = mk_card("SelfMarker", abilities=[Ability("MARK", cost={"wind": 0}, effects=[{"op": "mark"}])])
     gs = types.SimpleNamespace(turn_player=mk_player([src]))
     ok = use_ability(gs, src, 0, None)
     assert ok
@@ -58,7 +54,8 @@ def test_cost_not_charged_if_no_exec(monkeypatch):
 
 
 def test_cost_charged_then_success_via_registry(monkeypatch):
-    from gsgsim.abilities import registers, use_ability
+    from gsgsim.abilities import registers
+    from gsgsim.abilities import use_ability
 
     called = {"ok": False}
 

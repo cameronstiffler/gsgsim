@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List
+from typing import Tuple
 
 
 def _hand_cost_tuple(card) -> Tuple[int, int, int]:
@@ -26,7 +27,8 @@ def _can_afford_auto(gs, player, idx) -> bool:
 
 
 def take_turn(gs, *, logger=None) -> None:
-    from .engine import deploy_from_hand, end_of_turn
+    from .engine import deploy_from_hand
+    from .engine import end_of_turn
 
     me = gs.turn_player
     playable: List[Tuple[int, tuple]] = []

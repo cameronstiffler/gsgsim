@@ -19,7 +19,8 @@ def _get_end_of_turn():
 
 
 def ai_take_turn(gs) -> None:
-    from .abilities import REGISTRY, use_ability
+    from .abilities import REGISTRY
+    from .abilities import use_ability
     from .payments import distribute_wind
 
     me = getattr(gs, "turn_player", None)

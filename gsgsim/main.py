@@ -5,9 +5,13 @@ import argparse
 import os
 import random
 
-from .engine import select_ui, start_of_turn
-from .loader import build_cards, find_squad_leader, load_deck_json
-from .models import GameState, Player
+from .engine import select_ui
+from .engine import start_of_turn
+from .loader import build_cards
+from .loader import find_squad_leader
+from .loader import load_deck_json
+from .models import GameState
+from .models import Player
 
 
 def main():
@@ -15,12 +19,8 @@ def main():
 
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--ui", choices=["cli", "rich"], default=os.environ.get("GSG_UI", "cli"))
-    parser.add_argument(
-        "--first", choices=["random", "p1", "p2"], default=os.environ.get("GSG_FIRST", "random")
-    )
-    parser.add_argument(
-        "--ai", choices=["none", "p1", "p2", "both"], default=os.environ.get("GSG_AI", "none")
-    )
+    parser.add_argument("--first", choices=["random", "p1", "p2"], default=os.environ.get("GSG_FIRST", "random"))
+    parser.add_argument("--ai", choices=["none", "p1", "p2", "both"], default=os.environ.get("GSG_AI", "none"))
     parser.add_argument("--auto", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=os.environ.get("GSG_SEED", None))
     args, _ = parser.parse_known_args()

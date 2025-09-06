@@ -13,7 +13,9 @@ def test_player_constructor_accepts_board_kwarg():
 
 
 def test_distribute_wind_signature_and_call():
-    from gsg_sim import Card, Player, distribute_wind
+    from gsg_sim import Card
+    from gsg_sim import Player
+    from gsg_sim import distribute_wind
 
     a = Card(name="A", rank=None, abilities=[], wind=0)
     p = Player("P", board=[a], hand=[], deck=[], retired=[])

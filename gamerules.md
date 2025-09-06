@@ -193,13 +193,63 @@ Do not protect the squad leader from being targeted by hostile abilities
 
 DEATH & DISCARD
 
+A GOON may accumulate up to 4 wind. The 4th will destroy it. Twisting your own GOON into the 4th wind is a legal move. Whatever the GOON spent the wind on will resolve before the GOON is destroyed. 
 
-GOONs that die go to the communal discard pile called the Dead Pool. The Dead Pool is a combination of all players dead goons
+GOONs that accumulate 4 or more wind are removed from play and go to the communal discard pile called the Dead Pool. The Dead Pool is a combination of all players dead goons.
 Once in the dead pool the goons become a resource for special deploys and abilities. Some deploys or abilities may require Biological or Mechanical dead goons from the dead pool.
 
 When a Dead Goon is used as a mechanical or biological resource they are Burned (removed from the game permanently).
 
-A GOON may accumulate up to 4 wind. The 4th will destroy it. Twisting your GOON into the 4th wind is a legal move. Whatever the GOON spent the wind on will resolve before the GOON is destroyed. 
+
+
+INTERFACE
+1)Display Goon name in board like this:
+[name][rank icon SL⭐|SG🔶|BG(no icon)|TΩ ][resist icon✋][no unwind icon🚫][biological icon🥩|mechanical icon⚙️][faction icon NARC🚨|PCU🌀[deployed this turn and cannot act🔒]
+example: Lokar Simmons⭐✋🥩🚨
+
+2)Display Goon name in hand like this:
+[name][rank icon SL⭐|SG🔶|BG(no icon)|TΩ ][resist icon✋][no unwind icon🚫][biological icon🥩|mechanical icon⚙️][faction icon NARC🚨|PCU🌀
+example: Lokar Simmons⭐✋🥩🚨
+
+3)Display Goon cost in hand like this:
+N⟲ N⛭ N⚈
+example:1⟲ 0⛭ 0⚈
+
+4)Display Abilities in ability column in board like this:
+[index][name][cost N⟲ N⛭ N⚈][text]
+[index][name][cost N⟲ N⛭ N⚈][text]
+...
+(each ability should occupy its own line)
+
+5)The player whos turn it is, their board should be rendered second so it is on the bottom and close to where their hand will be rendered. The player who went last turn's board should be printed first so it is on top in the console. 
+
+6) Display the dead pool on its own line after the player boards. Display the contents of the dead pool like this
+Dead Pool 🥩:N ⚙️:N
+
+COMMANDS
+1)Deploying Goons
+Manually deploy a goon from hand
+d[index in hand] [index of goon paying wind] [index of goon paying wind] ...
+example: d0 0 1 1  <----deploy goon 0 from hand. goon 0 on board contributes 1 wind and goon 1 on board contributes 2 wind.
+example:d1 0 0 <----deploy goon 1 from hand. goon 0 on board contributes 2 wind
+
+-if part of the goon deploy cost includes biological or mechanical from the Dead Pool, automatically burn(remove from game) the appropriate type of card from the dead pool. If bio or mech is required and not present in the dead pool, deploy fails
+
+2)Use goon ability command.
+
+Target opponent players goon with current players goon ability. Player is using one of their goons abilities on an opponents goon. Likely some sort of attack or negative effect.
+u[currrent player goon index] [ability index]>[target enemy goon index]
+
+Target with current players goon with current players goon ability. When a player wants to target his own goon with one of his goons abilities.
+u[currrent player goon index] [ability index]<[target current players goon index]
+
+Payment notes:
+When a goon uses its own ability, automatically add the wind cost of the ability to the goon. If bio or mech is part of the use cost, automatically subtract the correct type from the dead pool. if wind, mech or bio is not available to pay the use cost, the ability use fails. If the goon reaches 4 wind by paying for an ability, it is destroyed after the ability effect resolves. The maximum wind that may be appied to a goon is 4. If an ability costs 2 wind and the goon has 3 wind applied to it, it may not use the ability as it would result in a 5 wind total which is never allowed. goons may never have 5 or more wind on them.
+
+
+
+
+
 
 
 

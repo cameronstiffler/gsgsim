@@ -1,18 +1,11 @@
 from gsgsim.engine import start_of_turn
-from gsgsim.loader import build_cards, find_squad_leader, load_deck_json
-from gsgsim.models import GameState, Player
-from gsgsim.rules import apply_wind, apply_wind_with_resist
-
-
-def _mk_game():
-    narc = build_cards(load_deck_json("narc_deck.json"), faction="NARC")
-    pcu = build_cards(load_deck_json("pcu_deck.json"), faction="PCU")
-    p1_sl, p2_sl = find_squad_leader(narc), find_squad_leader(pcu)
-    p1 = Player("NARC", board=[p1_sl], hand=[], deck=[], retired=[])
-    p2 = Player("PCU", board=[p2_sl], hand=[], deck=[], retired=[])
-    gs = GameState(p1=p1, p2=p2, turn_player=p1, phase="start", turn_number=1, rng=None)
-    start_of_turn(gs)
-    return gs
+from gsgsim.loader import build_cards
+from gsgsim.loader import find_squad_leader
+from gsgsim.loader import load_deck_json
+from gsgsim.models import GameState
+from gsgsim.models import Player
+from gsgsim.rules import apply_wind
+from gsgsim.rules import apply_wind_with_resist
 
 
 def test_ko_at_four_wind():
@@ -46,7 +39,8 @@ def test_no_unwind_blocks_auto_unwind():
 
 def test_just_deployed_lock_blocks_spend_until_next_turn():
     from gsgsim import rules
-    from gsgsim.engine import deploy_from_hand, end_of_turn
+    from gsgsim.engine import deploy_from_hand
+    from gsgsim.engine import end_of_turn
 
     gs = _mk_game()
     # simulate a deploy: put a dummy card in hand and call deploy_from_hand if needed,
@@ -57,3 +51,14 @@ def test_just_deployed_lock_blocks_spend_until_next_turn():
     end_of_turn(gs)
     start_of_turn(gs)
     assert not rules.cannot_spend_wind(gs, card)
+
+
+def _mk_game():
+    narc = build_cards(load_deck_json("narc_deck.json"), faction="NARC")
+    pcu = build_cards(load_deck_json("pcu_deck.json"), faction="PCU")
+    p1_sl, p2_sl = find_squad_leader(narc), find_squad_leader(pcu)
+    p1 = Player("NARC", board=[p1_sl], hand=[], deck=[], retired=[])
+    p2 = Player("PCU", board=[p2_sl], hand=[], deck=[], retired=[])
+    gs = GameState(p1=p1, p2=p2, turn_player=p1, phase="start", turn_number=1, rng=None)
+    start_of_turn(gs)
+    return gs
