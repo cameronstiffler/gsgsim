@@ -10,8 +10,20 @@ from .models import GameState
 from .models import Player
 from .payments import distribute_wind
 from .rules import cannot_spend_wind
+from .rules import destroy_if_needed
 
 Chooser = Callable[[List[Tuple[int, object, int]], int], Optional[List[Tuple[int, int]]]]
+
+
+def _sweep_board_for_kills(gs):
+    # destroy any card that (for whatever reason) sits on board with wind >= 4
+    for side in (gs.p1, gs.p2):
+        for card in list(getattr(side, "board", [])):
+            try:
+                if int(getattr(card, "wind", 0) or 0) >= 4:
+                    destroy_if_needed(gs, card)
+            except Exception:
+                continue
 
 
 def deploy_from_hand(gs: GameState, player: Player, hand_idx: int, chooser: Optional[Chooser] = None) -> bool:
