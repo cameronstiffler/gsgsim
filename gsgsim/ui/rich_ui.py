@@ -216,11 +216,10 @@ class RichUI:
         c.print(board_table("Board P1", gs.p1))
         c.print(board_table("Board P2", gs.p2))
 
-        # Dead Pool status line
-        dead = getattr(gs, "dead_pool", [])
-        bio_count = sum(1 for c in dead if getattr(c, "is_bio", False) or "biological" in getattr(c, "icons", []))
-        mech_count = sum(1 for c in dead if getattr(c, "is_mech", False) or "mechanical" in getattr(c, "icons", []))
-        c.print(f"Dead Pool 🥩:{bio_count} ⚙️:{mech_count}")
+        # Dead Pool HUD line (always show counters)
+        bio = getattr(gs, "dead_pool_bio", 0)
+        mech = getattr(gs, "dead_pool_mech", 0)
+        c.print(f"Dead Pool 🥩:{bio} ⚙️:{mech}")
 
         def hand_table(title: str, player) -> Table:
             t = Table(title=f"{title} hand ({len(player.hand)})")
