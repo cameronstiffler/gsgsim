@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--ai", choices=["none", "p1", "p2", "both"], default=os.environ.get("GSG_AI", "none"))
     parser.add_argument("--auto", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=os.environ.get("GSG_SEED", None))
+    parser.add_argument("--strict", action="store_true", default=False)
     args, _ = parser.parse_known_args()
 
     rng = random.Random(args.seed) if args.seed is not None else random.Random()
