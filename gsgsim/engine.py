@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
 from typing import Callable
+from typing import Dict
+from typing import Iterable
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -258,3 +261,203 @@ def manual_pay_cli(gs, amount: int, target_spec: str) -> None:
     targets = parse_targets(target_spec, gs)
     ok = manual_pay(gs, amount, targets)
     print("pay ok" if ok else "pay failed (insufficient eligible goons)")
+
+
+# === MACHINE EFFECTS (Wave A) ==================================================
+# Standalone runtime for machine-readable effects. Safe to import and call from
+# your ability execution path. Does not print; UI owns messaging/prompts.
+#
+# Wave A coverage:
+# - alter_wind (±N or "X")
+# - prevent_unwind
+# - disable_abilities, disable_contribution
+# - destroy
+# - retire_on_destroy, return_to_hand_on_destroy (registered as status flags)
+# - grant_resist
+# - cannot_be_targeted, must_be_destroyed_first
+# - search_deck, draw_cards
+# Targets: self, any, ally_all, opponent_all, ally_all_except:self,
+#          all_opponent_playergoons, two_goons, three_goons, card_name:*,
+#          dead_pool
+# Durations: instant, until_end_of_turn, next_turn, next_unwind, persistent
+
+
+def _me_ensure_runtime_containers(gs):
+    if not hasattr(gs, "statuses"):
+        gs.statuses = {}  # board-wide statuses keyed by (scope, id)
+    if not hasattr(gs, "marks"):
+        gs.marks = {}  # e.g., {"marked": {target_card_id: source_card_id}}
+    # Per-goon status dict is created on demand by _me_status_for(goon)
+
+
+def _me_status_for(goon):
+    if not hasattr(goon, "status"):
+        goon.status = {}
+    return goon.status
+
+
+def _me_owner_of(gs, goon):
+    if goon in gs.p1.board or goon in gs.p1.hand or goon in gs.p1.deck:
+        return gs.p1
+    return gs.p2
+
+
+def _me_opponent_of(gs, player):
+    return gs.p2 if player is gs.p1 else gs.p1
+
+
+def _me_all_goons(gs) -> List[Any]:
+    return list(gs.p1.board) + list(gs.p2.board)
+
+
+def _me_filter_by_tokens(gs, source, tokens: List[str]) -> List[Any]:
+    # Simple resolver for Wave A. When ambiguous (e.g., "any"), the caller/chooser must pick.
+    out: List[Any] = []
+    owner = _me_owner_of(gs, source)
+    opp = _me_opponent_of(gs, owner)
+    for tok in tokens:
+        if tok == "self":
+            out.append(source)
+        elif tok == "ally_all":
+            out.extend(owner.board)
+        elif tok == "opponent_all":
+            out.extend(opp.board)
+        elif tok == "ally_all_except:self":
+            out.extend([g for g in owner.board if g is not source])
+        elif tok == "all_opponent_playergoons":
+            out.extend(opp.board)
+        elif tok == "dead_pool":
+            # Represent the shared Dead Pool as a tuple marker; Wave B can expand if needed.
+            out.append(("dead_pool",))
+        elif tok.startswith("card_name:"):
+            name = tok.split(":", 1)[1]
+            for g in _me_all_goons(gs):
+                if getattr(g, "name", None) == name:
+                    out.append(g)
+        elif tok in ("any", "two_goons", "three_goons"):
+            # chooser must handle these
+            out.append(("CHOOSE", tok))
+        else:
+            # Unrecognized token: ignore (schema should prevent this)
+            continue
+    return out
+
+
+def _me_register_duration(targets: Iterable[Any], tag: str, value: Any, duration: str):
+    for t in targets:
+        if isinstance(t, tuple):  # markers like ('dead_pool',) or ('CHOOSE', …)
+            continue
+        st = _me_status_for(t)
+        arr = st.setdefault(tag, [])
+        arr.append({"value": value, "duration": duration})
+
+
+def _me_apply_alter_wind(gs, targets: List[Any], amount, chooser) -> None:
+    # amount can be int or "X" (chooser must supply actual distribution for X)
+    from .engine import add_wind_and_check  # local canonical wind mutation
+
+    if amount == "X":
+        # Expect chooser to return a dict {goon: int}
+        dist = chooser("distribute_wind", targets)
+        for goon, delta in (dist or {}).items():
+            add_wind_and_check(gs, goon, int(delta))
+    else:
+        for t in targets:
+            if isinstance(t, tuple):
+                continue
+            add_wind_and_check(gs, t, int(amount))
+
+
+def _me_apply_destroy(gs, targets: List[Any]) -> None:
+    from .rules import destroy_if_needed
+
+    for t in targets:
+        if isinstance(t, tuple):
+            continue
+        destroy_if_needed(gs, t)
+
+
+def _me_apply_draw(gs, player, n: int):
+    for _ in range(max(0, int(n))):
+        if getattr(player, "deck", None):
+            player.hand.append(player.deck.pop(0))
+
+
+def _me_apply_search_deck(gs, player, chooser):
+    # chooser should return an object that exists in player.deck
+    pick = chooser("search_deck", player.deck)
+    if pick in player.deck:
+        player.deck.remove(pick)
+        player.hand.append(pick)
+    # naive reshuffle; if you have gs.rng, you can swap it in later
+    if getattr(gs, "rng", None):
+        gs.rng.shuffle(player.deck)
+    else:
+        player.deck.reverse()
+        player.deck.reverse()
+
+
+def run_machine_effects(gs, source, ability: Dict[str, Any], chooser: Callable):
+    """
+    Apply all Wave A effects for a single ability. `chooser(kind, options)` is a
+    callback the UI supplies to resolve 'any'/'two_goons'/'three_goons' and 'X'.
+    Returns a list of prompts created during execution (UI may have already handled).
+    """
+    _me_ensure_runtime_containers(gs)
+    effects = ability.get("effects") or []
+    if not effects:
+        return []
+    owner = _me_owner_of(gs, source)
+    prompts: List[Tuple[str, Any]] = []
+    for eff in effects:
+        et = eff.get("effect_type")
+        tokens = eff.get("target") or []
+        duration = eff.get("duration", "instant")
+        amount = eff.get("amount", None)
+        # Resolve targets
+        resolved = _me_filter_by_tokens(gs, source, tokens)
+        # Let chooser resolve any ambiguous tokens
+        needs_choice = [t for t in resolved if isinstance(t, tuple) and t[0] == "CHOOSE"]
+        if needs_choice:
+            choice = chooser("choose_targets", {"source": source, "ability": ability, "need": [t[1] for t in needs_choice], "pool": _me_all_goons(gs)})
+            # Replace markers with chosen goons
+            new_resolved = []
+            it = iter(choice if isinstance(choice, list) else [choice])
+            for t in resolved:
+                if isinstance(t, tuple) and t[0] == "CHOOSE":
+                    try:
+                        new_resolved.append(next(it))
+                    except StopIteration:
+                        continue
+                else:
+                    new_resolved.append(t)
+            resolved = new_resolved
+        # Execute effect
+        if et == "alter_wind":
+            _me_apply_alter_wind(gs, resolved, amount, chooser)
+        elif et == "prevent_unwind":
+            _me_register_duration(resolved, "prevent_unwind", True, duration)
+        elif et == "disable_abilities":
+            _me_register_duration(resolved, "disable_abilities", True, duration)
+        elif et == "disable_contribution":
+            _me_register_duration(resolved, "disable_contribution", True, duration)
+        elif et == "destroy":
+            _me_apply_destroy(gs, resolved)
+        elif et == "retire_on_destroy":
+            _me_register_duration(resolved, "retire_on_destroy", True, duration)
+        elif et == "return_to_hand_on_destroy":
+            _me_register_duration(resolved, "return_to_hand_on_destroy", True, duration)
+        elif et == "grant_resist":
+            _me_register_duration(resolved, "resist", True, duration)
+        elif et == "cannot_be_targeted":
+            _me_register_duration(resolved, "cannot_be_targeted", True, duration)
+        elif et == "must_be_destroyed_first":
+            _me_register_duration(resolved, "must_be_destroyed_first", True, duration)
+        elif et == "search_deck":
+            _me_apply_search_deck(gs, owner, chooser)
+        elif et == "draw_cards":
+            _me_apply_draw(gs, owner, int(amount or 1))
+        else:
+            # Unknown (Wave B or beyond): ignore here.
+            pass
+    return prompts
