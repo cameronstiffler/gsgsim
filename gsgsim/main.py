@@ -65,7 +65,23 @@ def main():
     ai_p1 = ai_sel in ("p1", "both")
     ai_p2 = ai_sel in ("p2", "both")
     auto = bool(args.auto or os.environ.get("GSG_AUTO"))
-    ui.run_loop(gs, ai_p1=ai_p1, ai_p2=ai_p2, auto=auto)
+    if auto:
+        print("Auto mode enabled")
+    # ui.run_loop(gs, ai_p1=ai_p1, ai_p2=ai_p2, auto=auto)
+    ui.run_loop(gs)
+    # Map CLI ai flag (none/p1/p2/both) to GS flags
+    ai_p1 = args.ai in ("p1", "both")
+    ai_p2 = args.ai in ("p2", "both")
+
+    # Set the AI flags on the game state (so UI can read them)
+    gs.p1.is_ai = ai_p1
+    gs.p2.is_ai = ai_p2
+
+    # Optional but useful: print which faction(s) are AI, matching your human-readable expectation
+    if ai_p1:
+        print(f"AI enabled for: {gs.p1.faction.upper()}")
+    if ai_p2:
+        print(f"AI enabled for: {gs.p2.faction.upper()}")
 
 
 if __name__ == "__main__":
