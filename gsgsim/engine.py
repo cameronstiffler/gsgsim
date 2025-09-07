@@ -18,6 +18,39 @@ from .rules import destroy_if_needed
 Chooser = Callable[[List[Tuple[int, object, int]], int], Optional[List[Tuple[int, int]]]]
 
 
+# --- runtime wrapper for frozen dataclass cards -------------------------------
+class _RuntimeCard:
+    """
+    Lightweight proxy that lets the engine attach mutable, runtime-only fields
+    (wind, just_deployed, new_this_turn, ability_used_this_turn, etc.) to cards
+    that are defined as frozen dataclasses by the loader.
+    """
+
+    __slots__ = ("_base", "__dict__")
+
+    def __init__(self, base):
+        object.__setattr__(self, "_base", base)
+
+    def __getattr__(self, name):
+        # Delegate to the underlying dataclass if not found on the proxy
+        return getattr(object.__getattribute__(self, "_base"), name)
+
+    def __setattr__(self, name, value):
+        # Store runtime fields on the proxy itself
+        self.__dict__[name] = value
+
+    def __repr__(self):
+        base = object.__getattribute__(self, "_base")
+        return f"<RuntimeCard {getattr(base, 'name', '?')}>"
+
+
+def _wrap_runtime(card):
+    # idempotent: don't double-wrap
+    if isinstance(card, _RuntimeCard):
+        return card
+    return _RuntimeCard(card)
+
+
 def deploy_from_hand(gs: GameState, player: Player, hand_idx: int, chooser: Optional[Chooser] = None) -> bool:
     if hand_idx < 0 or hand_idx >= len(player.hand):
         print("invalid hand index")
@@ -35,12 +68,13 @@ def deploy_from_hand(gs: GameState, player: Player, hand_idx: int, chooser: Opti
     # Pay wind
     if not distribute_wind(player, wind_cost, gs=gs, chooser=chooser):
         return False
-    # Move card to board
-    player.board.append(card)
+    # Move card to board (wrap to allow runtime mutable attrs on frozen dataclasses)
+    runtime = _wrap_runtime(card)
+    player.board.append(runtime)
     player.hand.pop(hand_idx)
-    card.wind = 0
-    card.new_this_turn = True
-    card.just_deployed = True
+    runtime.wind = 0
+    runtime.new_this_turn = True
+    runtime.just_deployed = True
     _sweep_board_for_kills(gs)
     return True
 
@@ -282,6 +316,31 @@ def manual_pay_cli(gs, amount: int, target_spec: str) -> None:
 # Durations: instant, until_end_of_turn, next_turn, next_unwind, persistent
 
 
+# -- helpers: normalize dataclass Ability/Effect objects to dict-like mappings
+def _me_as_mapping_ability(ability):
+    """Return a dict with at least 'effects' for either a dict or a dataclass Ability."""
+    if isinstance(ability, dict):
+        return ability
+    out = {}
+    for k in ("name", "passive", "must_use", "text"):
+        if hasattr(ability, k):
+            out[k] = getattr(ability, k)
+    effs = getattr(ability, "effects", None)
+    out["effects"] = [_me_as_mapping_effect(e) for e in (effs or [])]
+    return out
+
+
+def _me_as_mapping_effect(eff):
+    """Return a dict with keys used by the interpreter for either dict or dataclass Effect."""
+    if isinstance(eff, dict):
+        return eff
+    d = {}
+    for k in ("effect_type", "target", "duration", "amount", "value", "side", "count"):
+        if hasattr(eff, k):
+            d[k] = getattr(eff, k)
+    return d
+
+
 def _me_ensure_runtime_containers(gs):
     if not hasattr(gs, "statuses"):
         gs.statuses = {}  # board-wide statuses keyed by (scope, id)
@@ -404,23 +463,34 @@ def run_machine_effects(gs, source, ability: Dict[str, Any], chooser: Callable):
     Returns a list of prompts created during execution (UI may have already handled).
     """
     _me_ensure_runtime_containers(gs)
-    effects = ability.get("effects") or []
+
+    # >>>> IMPORTANT: dataclass-safe access <<<<
+    ab_map = _me_as_mapping_ability(ability)
+    effects = ab_map.get("effects") or []
+    # ------------------------------------------
+
     if not effects:
         return []
+
     owner = _me_owner_of(gs, source)
     prompts: List[Tuple[str, Any]] = []
+
     for eff in effects:
+        # >>>> IMPORTANT: dataclass-safe access <<<<
+        eff = _me_as_mapping_effect(eff)
+        # ------------------------------------------
         et = eff.get("effect_type")
         tokens = eff.get("target") or []
         duration = eff.get("duration", "instant")
         amount = eff.get("amount", None)
+
         # Resolve targets
         resolved = _me_filter_by_tokens(gs, source, tokens)
+
         # Let chooser resolve any ambiguous tokens
         needs_choice = [t for t in resolved if isinstance(t, tuple) and t[0] == "CHOOSE"]
         if needs_choice:
             choice = chooser("choose_targets", {"source": source, "ability": ability, "need": [t[1] for t in needs_choice], "pool": _me_all_goons(gs)})
-            # Replace markers with chosen goons
             new_resolved = []
             it = iter(choice if isinstance(choice, list) else [choice])
             for t in resolved:
@@ -432,6 +502,7 @@ def run_machine_effects(gs, source, ability: Dict[str, Any], chooser: Callable):
                 else:
                     new_resolved.append(t)
             resolved = new_resolved
+
         # Execute effect
         if et == "alter_wind":
             _me_apply_alter_wind(gs, resolved, amount, chooser)
@@ -460,4 +531,5 @@ def run_machine_effects(gs, source, ability: Dict[str, Any], chooser: Callable):
         else:
             # Unknown (Wave B or beyond): ignore here.
             pass
+
     return prompts
