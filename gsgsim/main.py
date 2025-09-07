@@ -10,8 +10,17 @@ from .engine import start_of_turn
 from .loader import build_cards
 from .loader import find_squad_leader
 from .loader import load_deck_json
+from .loader_new import assert_legal_deck
+from .loader_new import load_deck
 from .models import GameState
 from .models import Player
+
+
+def _choose_decks(args):
+    use_strict = bool(getattr(args, "use_strict", False) or os.environ.get("GSG_USE_STRICT"))
+    if use_strict:
+        return ("pcu_deck_strict.json", "narc_deck_strict.json")
+    return ("pcu_deck.json", "narc_deck.json")
 
 
 def main():
@@ -23,14 +32,27 @@ def main():
     parser.add_argument("--ai", choices=["none", "p1", "p2", "both"], default=os.environ.get("GSG_AI", "none"))
     parser.add_argument("--auto", action="store_true", default=False)
     parser.add_argument("--seed", type=int, default=os.environ.get("GSG_SEED", None))
-    parser.add_argument("--strict", action="store_true", default=False)
+    parser.add_argument("--use-strict", action="store_true", default=False, help="Use strict deck JSON for gameplay (or set GSG_USE_STRICT=1)")
     args, _ = parser.parse_known_args()
+
+    pcu_path, narc_path = _choose_decks(args)
 
     rng = random.Random(args.seed) if args.seed is not None else random.Random()
 
+    # Validate decks against the strict schema when using strict decks or when GSG_STRICT is set
+    try:
+        if bool(os.environ.get("GSG_STRICT")) or bool(getattr(args, "use_strict", False)):
+            strict_narc = load_deck(narc_path)
+            strict_pcu = load_deck(pcu_path)
+            if os.environ.get("GSG_STRICT"):
+                assert_legal_deck(strict_narc)
+                assert_legal_deck(strict_pcu)
+    except Exception as _schema_err:
+        raise SystemExit(f"Deck schema validation failed: {_schema_err}")
+
     # Load decks
-    narc = load_deck_json("narc_deck.json")
-    pcu = load_deck_json("pcu_deck.json")
+    narc = load_deck_json(narc_path)
+    pcu = load_deck_json(pcu_path)
     narc_cards = build_cards(narc, faction="NARC")
     pcu_cards = build_cards(pcu, faction="PCU")
 
@@ -62,27 +84,25 @@ def main():
 
     ui = select_ui(args.ui)
     print("GSG engine ready. Decks loaded. SLs on board. (Type 'help' to see commands.)")
+
     ai_sel = (args.ai or os.environ.get("GSG_AI") or "").strip().lower()
     ai_p1 = ai_sel in ("p1", "both")
     ai_p2 = ai_sel in ("p2", "both")
     auto = bool(args.auto or os.environ.get("GSG_AUTO"))
     if auto:
         print("Auto mode enabled")
-    # ui.run_loop(gs, ai_p1=ai_p1, ai_p2=ai_p2, auto=auto)
-    ui.run_loop(gs)
-    # Map CLI ai flag (none/p1/p2/both) to GS flags
-    ai_p1 = args.ai in ("p1", "both")
-    ai_p2 = args.ai in ("p2", "both")
 
-    # Set the AI flags on the game state (so UI can read them)
+    # Set AI flags on game state so UI can act on them
     gs.p1.is_ai = ai_p1
     gs.p2.is_ai = ai_p2
 
-    # Optional but useful: print which faction(s) are AI, matching your human-readable expectation
+    # Friendly markers (useful for tests and smoke runs)
     if ai_p1:
         print(f"AI enabled for: {gs.p1.faction.upper()}")
     if ai_p2:
         print(f"AI enabled for: {gs.p2.faction.upper()}")
+
+    ui.run_loop(gs)
 
 
 if __name__ == "__main__":

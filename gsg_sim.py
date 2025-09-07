@@ -20,6 +20,17 @@ from gsgsim import start_of_turn
 from gsgsim import use_ability_cli
 from gsgsim.main import main
 
+
+def _choose_decks(args):
+    import os
+
+    use_strict = bool(getattr(args, "use_strict", False)) or bool(os.environ.get("GSG_USE_STRICT"))
+    if use_strict:
+        return ("pcu_deck_strict.json", "narc_deck_strict.json")
+    # Legacy/default paths
+    return ("pcu_deck.json", "narc_deck.json")
+
+
 __all__ = [
     "Ability",
     "Card",
@@ -41,9 +52,6 @@ __all__ = [
     "select_ui",
     "main",
 ]
-
-if __name__ == "__main__":
-    main()
 
 
 def _launch_with_flags():
