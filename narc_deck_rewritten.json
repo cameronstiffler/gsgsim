@@ -16,6 +16,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "LITIGIOUS GRIDLOCK",
@@ -26,8 +27,16 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Target goon does not unwind in its next unwind phase",
-          "effects": []
+          "text": "Target goon does not unwind in its next unwind phase.",
+          "effects": [
+            {
+              "effect_type": "prevent_unwind",
+              "target": [
+                "any"
+              ],
+              "duration": "next_unwind"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/auditon.png",
@@ -47,6 +56,14 @@
       "mechanical": true,
       "resist": true,
       "no_unwind": true,
+      "deploy_requirements": [
+        {
+          "type": "requires_rank_in_play",
+          "side": "self",
+          "count": 2,
+          "value": "SG"
+        }
+      ],
       "abilities": [
         {
           "name": "SLUG",
@@ -58,7 +75,16 @@
           "passive": false,
           "must_use": false,
           "text": "2 to target goon",
-          "effects": []
+          "effects": [
+            {
+              "effect_type": "alter_wind",
+              "amount": 2,
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            }
+          ]
         },
         {
           "name": "RED WET SPOT",
@@ -70,17 +96,19 @@
           "passive": false,
           "must_use": false,
           "text": "Destroy target goon",
-          "effects": []
-        }
-      ],
-      "requirements": [
-        {
-          "type": "text",
-          "value": "Player must control 2 Squad Goons to deploy Bruut Enforcer"
+          "effects": [
+            {
+              "effect_type": "destroy",
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            }
+          ]
         }
       ],
       "notes": [
-        "Player may pay 1 wind to unwind BRUUT Enforcer"
+        "Player may pay 1 wind to unwind Bruut Enforcer"
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/bruut.png",
       "image_url_mini": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/mini/bruut.jpg"
@@ -99,6 +127,7 @@
       "mechanical": true,
       "resist": true,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "SENTRY MODE",
@@ -109,8 +138,16 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Target Goon gains resist until beginning of player's next turn",
-          "effects": []
+          "text": "Target Goon gains resist until beginning of player's next turn.",
+          "effects": [
+            {
+              "effect_type": "grant_resist",
+              "target": [
+                "any"
+              ],
+              "duration": "until_end_of_turn"
+            }
+          ]
         },
         {
           "name": "BLAST",
@@ -122,7 +159,16 @@
           "passive": false,
           "must_use": false,
           "text": "Add 2 wind to target goon",
-          "effects": []
+          "effects": [
+            {
+              "effect_type": "alter_wind",
+              "amount": 2,
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            }
+          ]
         },
         {
           "name": "DEFENSIVE POSTURE",
@@ -133,8 +179,16 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Buzzkill and Killjoy both pay 1 wind and Player's Goons gain Resist until Player's next turn",
-          "effects": []
+          "text": "Buzzkill and Killjoy both pay 1 wind; Player's Goons gain Resist until Player's next turn.",
+          "effects": [
+            {
+              "effect_type": "grant_resist",
+              "target": [
+                "ally_all"
+              ],
+              "duration": "until_end_of_turn"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/buzzkill.png",
@@ -154,6 +208,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "SHACKLE BEAM",
@@ -164,8 +219,30 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Target Goon may not unwind, act or contribute wind to deploy next turn",
-          "effects": []
+          "text": "Target Goon may not unwind, act or contribute wind to deploy next turn.",
+          "effects": [
+            {
+              "effect_type": "prevent_unwind",
+              "target": [
+                "any"
+              ],
+              "duration": "next_unwind"
+            },
+            {
+              "effect_type": "disable_abilities",
+              "target": [
+                "any"
+              ],
+              "duration": "next_turn"
+            },
+            {
+              "effect_type": "disable_contribution",
+              "target": [
+                "any"
+              ],
+              "duration": "next_turn"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/detainprobe.png",
@@ -185,6 +262,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "PRECISION STRIKE",
@@ -195,8 +273,17 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Add 1 wind to target Goon",
-          "effects": []
+          "text": "Add 1 wind to target Goon.",
+          "effects": [
+            {
+              "effect_type": "alter_wind",
+              "amount": 1,
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            }
+          ]
         },
         {
           "name": "ORDINANCE ARRAY",
@@ -207,8 +294,17 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Distribute 3 wind among 3 target Goons",
-          "effects": []
+          "text": "Distribute 3 wind among 3 target Goons.",
+          "effects": [
+            {
+              "effect_type": "alter_wind",
+              "amount": 1,
+              "target": [
+                "three_goons"
+              ],
+              "duration": "instant"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/marine_marauder.png",
@@ -228,6 +324,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "SCAN FOR VULNERABILITY",
@@ -238,8 +335,16 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "A Goon may use an ability twice on Goon targeted with SCAN FOR VULNERABILITY",
-          "effects": []
+          "text": "A goon may use an ability twice on the scanned target this turn.",
+          "effects": [
+            {
+              "effect_type": "enable_double_use_against_target",
+              "target": [
+                "any"
+              ],
+              "duration": "until_end_of_turn"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/k9.png",
@@ -259,6 +364,7 @@
       "mechanical": true,
       "resist": true,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "SUBMISSION HOLD",
@@ -269,8 +375,16 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Target Goon does not unwind on players next turn",
-          "effects": []
+          "text": "Target Goon does not unwind on player's next turn.",
+          "effects": [
+            {
+              "effect_type": "prevent_unwind",
+              "target": [
+                "any"
+              ],
+              "duration": "next_unwind"
+            }
+          ]
         },
         {
           "name": "NEUTRALIZE",
@@ -282,7 +396,16 @@
           "passive": false,
           "must_use": false,
           "text": "Add 2 wind to target goon",
-          "effects": []
+          "effects": [
+            {
+              "effect_type": "alter_wind",
+              "amount": 2,
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            }
+          ]
         },
         {
           "name": "DEFENSIVE POSTURE",
@@ -293,8 +416,16 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Buzzkill and Killjoy both pay 1 wind and Player's Goons gain Resist until Player's next turn",
-          "effects": []
+          "text": "Buzzkill and Killjoy both pay 1 wind; Player's Goons gain Resist until Player's next turn.",
+          "effects": [
+            {
+              "effect_type": "grant_resist",
+              "target": [
+                "ally_all"
+              ],
+              "duration": "until_end_of_turn"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/killjoy.png",
@@ -314,6 +445,7 @@
       "mechanical": false,
       "resist": true,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "RESOURCEFUL",
@@ -324,8 +456,17 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Draw a card",
-          "effects": []
+          "text": "Draw a card.",
+          "effects": [
+            {
+              "effect_type": "draw_cards",
+              "amount": 1,
+              "target": [
+                "self"
+              ],
+              "duration": "instant"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/lokar.png",
@@ -345,6 +486,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": true,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "SELF DESTRUCT",
@@ -355,8 +497,24 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Destroy Lurker and add 2 wind to target Goon",
-          "effects": []
+          "text": "Destroy Lurker and add 2 wind to target Goon.",
+          "effects": [
+            {
+              "effect_type": "destroy",
+              "target": [
+                "self"
+              ],
+              "duration": "instant"
+            },
+            {
+              "effect_type": "alter_wind",
+              "amount": 2,
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            }
+          ]
         },
         {
           "name": "REACTIVE MUNITIONS",
@@ -365,10 +523,18 @@
             "gear": 0,
             "meat": 0
           },
-          "passive": false,
+          "passive": true,
           "must_use": false,
-          "text": "Destroy Goon who destroys Lurker",
-          "effects": []
+          "text": "Destroy Goon who destroys Lurker.",
+          "effects": [
+            {
+              "effect_type": "destroy_attacker_on_destroy",
+              "target": [
+                "self"
+              ],
+              "duration": "persistent"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/lurker.png",
@@ -388,6 +554,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "DORSAL CAVITY RINSE",
@@ -398,8 +565,17 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Remove 1 wind from target Goon",
-          "effects": []
+          "text": "Remove 1 wind from target Goon.",
+          "effects": [
+            {
+              "effect_type": "alter_wind",
+              "amount": -1,
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/medi.png",
@@ -419,6 +595,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "BIDE TIME",
@@ -429,8 +606,16 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Mistrex gains Resist until beginning of Player's next",
-          "effects": []
+          "text": "Mistrex gains Resist until beginning of Player's next turn.",
+          "effects": [
+            {
+              "effect_type": "grant_resist",
+              "target": [
+                "self"
+              ],
+              "duration": "until_end_of_turn"
+            }
+          ]
         },
         {
           "name": "TAZING CRACK",
@@ -441,8 +626,16 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Target Goon does not unwind during it's next unwind",
-          "effects": []
+          "text": "Target Goon does not unwind during its next unwind.",
+          "effects": [
+            {
+              "effect_type": "prevent_unwind",
+              "target": [
+                "any"
+              ],
+              "duration": "next_unwind"
+            }
+          ]
         },
         {
           "name": "DOMINATE",
@@ -453,8 +646,16 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Use target Goon ability on target of Player's choice. Target Goon pays wind as it would on it's turn",
-          "effects": []
+          "text": "Use target Goon ability on a target of Player's choice. Target Goon pays wind as it would on its turn.",
+          "effects": [
+            {
+              "effect_type": "copy_and_cast_target_ability",
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/mistrex.png",
@@ -474,6 +675,7 @@
       "mechanical": false,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "ORBITAL SMITE",
@@ -484,8 +686,23 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Destroy target Goon and burn target from game",
-          "effects": []
+          "text": "Destroy target Goon and burn target from game.",
+          "effects": [
+            {
+              "effect_type": "destroy",
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            },
+            {
+              "effect_type": "retire_on_destroy",
+              "target": [
+                "any"
+              ],
+              "duration": "one_shot_trigger"
+            }
+          ]
         },
         {
           "name": "MASS SHACKLE",
@@ -496,8 +713,16 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Target Player's Goons do not unwind on target Player's next turn",
-          "effects": []
+          "text": "Target Player's Goons do not unwind on that Player's next turn.",
+          "effects": [
+            {
+              "effect_type": "prevent_unwind",
+              "target": [
+                "opponent_all"
+              ],
+              "duration": "next_unwind"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/narcstar.png",
@@ -517,6 +742,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "SCATTER LOAD",
@@ -527,8 +753,17 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "1 wind to 2 target Goons",
-          "effects": []
+          "text": "1 wind to 2 target Goons.",
+          "effects": [
+            {
+              "effect_type": "alter_wind",
+              "amount": 1,
+              "target": [
+                "two_goons"
+              ],
+              "duration": "instant"
+            }
+          ]
         },
         {
           "name": "GOON BUSTER",
@@ -539,8 +774,17 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Add 3 wind to target Goon",
-          "effects": []
+          "text": "Add 3 wind to target Goon.",
+          "effects": [
+            {
+              "effect_type": "alter_wind",
+              "amount": 3,
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/noblobber.png",
@@ -560,6 +804,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "PROCESS",
@@ -570,8 +815,26 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Droid pays 1 wind and burn 1 Goon with biological from Dead Pool to remove 1 wind from target Goon",
-          "effects": []
+          "text": "Burn 1 biological from Dead Pool to remove 1 wind from target Goon.",
+          "effects": [
+            {
+              "effect_type": "banish_from_dead_pool",
+              "amount": 1,
+              "value": "biological",
+              "target": [
+                "dead_pool"
+              ],
+              "duration": "instant"
+            },
+            {
+              "effect_type": "alter_wind",
+              "amount": -1,
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/sasdroid.png",
@@ -591,6 +854,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "AUTOBURST",
@@ -601,8 +865,17 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Add 1 wind to target Goon",
-          "effects": []
+          "text": "Add 1 wind to target Goon.",
+          "effects": [
+            {
+              "effect_type": "alter_wind",
+              "amount": 1,
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            }
+          ]
         },
         {
           "name": "LEAD LASER",
@@ -613,8 +886,17 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Add 2 wind to target Goon",
-          "effects": []
+          "text": "Add 2 wind to target Goon.",
+          "effects": [
+            {
+              "effect_type": "alter_wind",
+              "amount": 2,
+              "target": [
+                "any"
+              ],
+              "duration": "instant"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/sentry.png",
@@ -634,6 +916,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "FORTIFICATION NETWORK",
@@ -642,10 +925,19 @@
             "gear": 0,
             "meat": 0
           },
-          "passive": false,
+          "passive": true,
           "must_use": false,
-          "text": "Player's Goons may not be the target of negative effects while 2 or more Shield Array Nodes are in play",
-          "effects": []
+          "text": "While 2+ Shield Array Nodes are in play, Player's Goons may not be the target of negative effects.",
+          "effects": [
+            {
+              "effect_type": "conditional_cannot_be_targeted_by_negative_effects",
+              "value": "shield_array_nodes>=2",
+              "target": [
+                "ally_all"
+              ],
+              "duration": "persistent"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/shield.png",
@@ -665,6 +957,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "COVER",
@@ -675,8 +968,16 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "Target Goon may not be targeted by enemy Goon abilities until beginning of player's next turn",
-          "effects": []
+          "text": "Target Goon may not be targeted by enemy Goon abilities until the beginning of player's next turn.",
+          "effects": [
+            {
+              "effect_type": "cannot_be_targeted",
+              "target": [
+                "any"
+              ],
+              "duration": "until_end_of_turn"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/shield.png",
@@ -696,9 +997,9 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [],
-      "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/simulant.png",
-      "image_url_mini": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/mini/simulant.jpg"
+      "notes": []
     },
     {
       "name": "Target Marker Probe",
@@ -714,6 +1015,7 @@
       "mechanical": true,
       "resist": false,
       "no_unwind": false,
+      "deploy_requirements": [],
       "abilities": [
         {
           "name": "MARK TARGET",
@@ -724,8 +1026,32 @@
           },
           "passive": false,
           "must_use": false,
-          "text": "When Goon adds wind as damage to targeted Goon, increase wind applied by 1. Nob Lobber and Marine Marauder may forego wind cost when targeting MARKED TARGET and no other Goons. Does not apply to abilities that target multiple Goons",
-          "effects": []
+          "text": "When a Goon adds wind as damage to the MARKED target this turn, increase by 1. Nob Lobber and Marine Marauder may forego wind cost when targeting only the MARKED target.",
+          "effects": [
+            {
+              "effect_type": "mark_target",
+              "target": [
+                "any"
+              ],
+              "duration": "until_end_of_turn"
+            },
+            {
+              "effect_type": "increase_damage_taken",
+              "amount": 1,
+              "target": [
+                "marked"
+              ],
+              "duration": "until_end_of_turn"
+            },
+            {
+              "effect_type": "reduce_cost_for_cards_against_marked",
+              "value": "Nob Lobber,Marine Marauder",
+              "target": [
+                "marked"
+              ],
+              "duration": "until_end_of_turn"
+            }
+          ]
         }
       ],
       "image_url_full": "https://cameronstiffler.github.io/goonsquadgalaxy/card-images/narc/target.png",

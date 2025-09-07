@@ -74,14 +74,85 @@
     "AbilityCost": {
       "$ref": "#/$defs/DeployCost"
     },
+    "EffectType": {
+      "type": "string",
+      "enum": [
+        "alter_wind",
+        "destroy",
+        "disable_abilities",
+        "disable_contribution",
+        "prevent_unwind",
+        "cannot_be_targeted",
+        "must_be_destroyed_first",
+        "redirect_damage",
+        "destroy_self_if_target_destroyed",
+        "enable_contribution",
+        "resurrect_from_dead_pool",
+        "no_unwind",
+        "retire_on_destroy",
+        "return_to_hand_on_destroy",
+        "search_deck",
+        "grant_followup_on_destroy",
+        "must_attack",
+        "draw_cards",
+        "destroy_attacker_on_destroy",
+        "grant_resist",
+        "copy_and_cast_target_ability",
+        "banish_from_dead_pool",
+        "mark_target",
+        "increase_damage_taken",
+        "reduce_cost_for_cards_against_marked",
+        "enable_double_use_against_target",
+        "conditional_cannot_be_targeted_by_negative_effects"
+      ]
+    },
+    "TargetToken": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "self",
+            "any",
+            "ally_all",
+            "opponent_all",
+            "ally_all_except:self",
+            "all_opponent_playergoons",
+            "x_goons",
+            "two_goons",
+            "goon_using_ability",
+            "dead_pool",
+            "revived_by_self",
+            "three_goons",
+            "marked"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^card_name:.+"
+        }
+      ]
+    },
+    "DurationToken": {
+      "type": "string",
+      "enum": [
+        "instant",
+        "until_end_of_turn",
+        "next_turn",
+        "next_unwind",
+        "next_unwind_if_damaged_this_turn",
+        "one_shot_trigger",
+        "persistent"
+      ]
+    },
     "Effect": {
       "type": "object",
       "required": [
         "effect_type"
       ],
+      "additionalProperties": false,
       "properties": {
         "effect_type": {
-          "type": "string"
+          "$ref": "#/$defs/EffectType"
         },
         "amount": {
           "oneOf": [
@@ -100,22 +171,36 @@
         "target": {
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/TargetToken"
           }
         },
         "duration": {
+          "$ref": "#/$defs/DurationToken"
+        },
+        "value": {
           "type": "string"
         }
       }
+    },
+    "DeployRequirementType": {
+      "type": "string",
+      "enum": [
+        "requires_card_in_play",
+        "requires_rank_in_play",
+        "requires_faction",
+        "requires_unique_in_play",
+        "text"
+      ]
     },
     "Requirement": {
       "type": "object",
       "required": [
         "type"
       ],
+      "additionalProperties": false,
       "properties": {
         "type": {
-          "type": "string"
+          "$ref": "#/$defs/DeployRequirementType"
         },
         "card_name": {
           "type": "string"
@@ -146,6 +231,7 @@
         "text",
         "effects"
       ],
+      "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string"
@@ -184,6 +270,7 @@
         "no_unwind",
         "abilities"
       ],
+      "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string"
@@ -217,7 +304,7 @@
         "no_unwind": {
           "type": "boolean"
         },
-        "requirements": {
+        "deploy_requirements": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/Requirement"
