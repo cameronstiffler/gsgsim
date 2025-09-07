@@ -36,7 +36,7 @@ def build_cards(deck_obj: Dict[str, Any], faction: Optional[str] = None) -> List
     cards: List[Card] = []
     for raw in deck_obj.get("goons", []):
         raw = _normalize_card_flags(raw, default_faction=faction)
-        name = raw["name"]
+        goon_name = raw["name"]
         rank = parse_rank(raw.get("rank", "Basic Goon"))
         traits = set(raw.get("icons", []))
 
@@ -73,10 +73,13 @@ def build_cards(deck_obj: Dict[str, Any], faction: Optional[str] = None) -> List
                 key = {"w": "wind", "g": "gear", "m": "meat"}[k]
                 cost[key] = cost.get(key, 0) + n
             # effect inference minimal (keep as-is)
-            abilities.append(Ability(a.get("name", "ABILITY"), cost, [], passive=passive))
+            aname = a.get("name", "ABILITY")
+            ab = Ability(aname, cost, [], passive=passive)
+            setattr(ab, "text", a.get("text", ""))
+            abilities.append(ab)
 
         card = Card(
-            name=name,
+            name=goon_name,
             rank=rank,
             faction=faction,
             traits=traits,

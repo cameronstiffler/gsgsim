@@ -15,17 +15,6 @@ from .rules import destroy_if_needed
 Chooser = Callable[[List[Tuple[int, object, int]], int], Optional[List[Tuple[int, int]]]]
 
 
-def _sweep_board_for_kills(gs):
-    # destroy any card that (for whatever reason) sits on board with wind >= 4
-    for side in (gs.p1, gs.p2):
-        for card in list(getattr(side, "board", [])):
-            try:
-                if int(getattr(card, "wind", 0) or 0) >= 4:
-                    destroy_if_needed(gs, card)
-            except Exception:
-                continue
-
-
 def deploy_from_hand(gs: GameState, player: Player, hand_idx: int, chooser: Optional[Chooser] = None) -> bool:
     if hand_idx < 0 or hand_idx >= len(player.hand):
         print("invalid hand index")
@@ -49,6 +38,7 @@ def deploy_from_hand(gs: GameState, player: Player, hand_idx: int, chooser: Opti
     card.wind = 0
     card.new_this_turn = True
     card.just_deployed = True
+    _sweep_board_for_kills(gs)
     return True
 
 
@@ -93,10 +83,31 @@ def _clear_turn_locks(gs):
                 c.ability_used_this_turn = False
 
 
+def _sweep_board_for_kills(gs) -> None:
+    """
+    Belt-and-suspenders: if any card is sitting at wind >= 4, destroy it now.
+    This guarantees we never render/go forward with illegal board state even if
+    a caller forgot to route through a destroy path after applying wind.
+    """
+    try:
+        sides = (gs.p1, gs.p2)
+    except Exception:
+        return
+    for side in sides:
+        for card in list(getattr(side, "board", [])):
+            try:
+                if int(getattr(card, "wind", 0) or 0) >= 4:
+                    destroy_if_needed(gs, card)
+            except Exception:
+                # never crash on bookkeeping
+                continue
+
+
 def end_of_turn(gs: GameState) -> None:
     # Pass turn and then clear new_this_turn for the next player
     gs.turn_player = gs.p2 if gs.turn_player is gs.p1 else gs.p1
     gs.turn_number += 1
+    _sweep_board_for_kills(gs)
     start_of_turn(gs)
 
 
@@ -109,6 +120,7 @@ def use_ability_cli(gs, src_idx: int, abil_idx: int, target_spec: str | None = N
     targets = parse_targets(target_spec or "", gs)
     ok = use_ability(gs, card, abil_idx, targets)
     print("ability ok" if ok else f'ability failed (passive/new/handler/cost): {getattr(card, "name", "<??>")} [{abil_idx}]')
+    _sweep_board_for_kills(gs)
     return
 
 

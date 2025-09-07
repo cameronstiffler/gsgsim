@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gsgsim.dev/schemas/deck.schema.json",
+  "title": "Goon Squad Galaxy Deck (Strict)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "faction",
+    "goons"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "faction": {
+      "type": "string",
+      "enum": [
+        "NARC",
+        "PCU"
+      ]
+    },
+    "goons": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/Goon"
+      }
+    }
+  },
+  "$defs": {
+    "Rank": {
+      "type": "string",
+      "enum": [
+        "SL",
+        "SG",
+        "BG",
+        "T"
+      ]
+    },
+    "CostNumber": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "const": "X"
+        }
+      ]
+    },
+    "DeployCost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wind",
+        "gear",
+        "meat"
+      ],
+      "properties": {
+        "wind": {
+          "$ref": "#/$defs/CostNumber"
+        },
+        "gear": {
+          "$ref": "#/$defs/CostNumber"
+        },
+        "meat": {
+          "$ref": "#/$defs/CostNumber"
+        }
+      }
+    },
+    "AbilityCost": {
+      "$ref": "#/$defs/DeployCost"
+    },
+    "Effect": {
+      "type": "object",
+      "required": [
+        "effect_type"
+      ],
+      "properties": {
+        "effect_type": {
+          "type": "string"
+        },
+        "amount": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "any",
+                "X"
+              ]
+            }
+          ]
+        },
+        "target": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "duration": {
+          "type": "string"
+        }
+      }
+    },
+    "Requirement": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "card_name": {
+          "type": "string"
+        },
+        "side": {
+          "type": "string",
+          "enum": [
+            "self",
+            "opponent"
+          ]
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "Ability": {
+      "type": "object",
+      "required": [
+        "name",
+        "cost",
+        "passive",
+        "must_use",
+        "text",
+        "effects"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "cost": {
+          "$ref": "#/$defs/AbilityCost"
+        },
+        "passive": {
+          "type": "boolean"
+        },
+        "must_use": {
+          "type": "boolean"
+        },
+        "text": {
+          "type": "string"
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Effect"
+          }
+        }
+      }
+    },
+    "Goon": {
+      "type": "object",
+      "required": [
+        "name",
+        "rank",
+        "duplicates",
+        "faction",
+        "deploy_cost",
+        "biological",
+        "mechanical",
+        "resist",
+        "no_unwind",
+        "abilities"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "rank": {
+          "$ref": "#/$defs/Rank"
+        },
+        "duplicates": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "faction": {
+          "type": "string",
+          "enum": [
+            "NARC",
+            "PCU"
+          ]
+        },
+        "deploy_cost": {
+          "$ref": "#/$defs/DeployCost"
+        },
+        "biological": {
+          "type": "boolean"
+        },
+        "mechanical": {
+          "type": "boolean"
+        },
+        "resist": {
+          "type": "boolean"
+        },
+        "no_unwind": {
+          "type": "boolean"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Requirement"
+          }
+        },
+        "abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Ability"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "flavor_text": {
+          "type": "string"
+        },
+        "image_url_full": {
+          "type": "string"
+        },
+        "image_url_mini": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

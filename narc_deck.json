@@ -31,6 +31,7 @@
     "rank": "Squad Goon",
     "resist": true,
     "faction": "narc",
+    "no_unwind": true,
     "duplicates": "4",
     "deploy_cost": [
       "4w"
@@ -252,6 +253,7 @@
     "name": "Dormex Lurker",
     "rank": "Basic Goon",
     "faction": "narc",
+    "no_unwind": true,
     "duplicates": "4",
     "deploy_cost": [
       "2w"

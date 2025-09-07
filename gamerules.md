@@ -216,8 +216,8 @@ N⟲ N⛭ N⚈
 example:1⟲ 0⛭ 0⚈
 
 4)Display Abilities in ability column in board like this:
-[index][name][cost N⟲ N⛭ N⚈][text]
-[index][name][cost N⟲ N⛭ N⚈][text]
+[index] [name][cost N⟲ N⛭ N⚈] [text]
+[index] [name][cost N⟲ N⛭ N⚈] [text]
 ...
 (each ability should occupy its own line)
 
@@ -226,7 +226,7 @@ example:1⟲ 0⛭ 0⚈
 6) Display the dead pool on its own line after the player boards. Display the contents of the dead pool like this
 Dead Pool 🥩:N ⚙️:N
 
-COMMANDS
+ADDITIONAL COMMANDS
 1)Deploying Goons
 Manually deploy a goon from hand
 d[index in hand] [index of goon paying wind] [index of goon paying wind] ...

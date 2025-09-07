@@ -142,6 +142,37 @@ def cost_str(card: Card) -> str:
     return f"{w}⟲ {g}⛭ {m}⚈"
 
 
+def _cost_block(obj) -> str:
+    """Return cost in 'N⟲ N⛭ N⚈' for either an ability or a card."""
+    try:
+        cost = getattr(obj, "cost", None)
+        if isinstance(cost, dict):
+            w = int(cost.get("wind", 0) or 0)
+            g = int(cost.get("gear", 0) or 0)
+            m = int(cost.get("meat", 0) or 0)
+            return f"{w}⟲ {g}⛭ {m}⚈"
+    except Exception:
+        pass
+    w = int(getattr(obj, "deploy_wind", 0) or 0)
+    g = int(getattr(obj, "deploy_gear", 0) or 0)
+    m = int(getattr(obj, "deploy_meat", 0) or 0)
+    return f"{w}⟲ {g}⛭ {m}⚈"
+
+
+def _abilities_block(card: "Card") -> str:
+    """Format abilities as lines: [index] [name][cost N⟲ N⛭ N⚈] [text]"""
+    out = []
+    for i, a in enumerate(getattr(card, "abilities", []) or []):
+        name = _safe_str(getattr(a, "name", "ABILITY"))
+        text = _safe_str(getattr(a, "text", "") or "")
+        cost_txt = _cost_block(a)
+        line = f"{i} {name}[{cost_txt}]"
+        if text:
+            line += f" {text}"
+        out.append(line)
+    return "\n".join(out) if out else "-"
+
+
 # ---------- Rich UI ----------
 
 
@@ -203,8 +234,7 @@ class RichUI:
             t.add_column("Wind", justify="right")
             t.add_column("Abilities")
             for i, card in enumerate(getattr(player, "board", [])):
-                abil = getattr(card, "abilities", [])
-                abil_txt = ", ".join(f"{idx}:{name}" for idx, name in enumerate(abil)) if abil else "-"
+                abil_txt = _abilities_block(card)
                 t.add_row(
                     str(i),
                     _name_with_icons(card, _resolve_faction(player, card)),
@@ -230,7 +260,7 @@ class RichUI:
                 t.add_row(
                     str(i),
                     _name_with_icons(card, _resolve_faction(player, card)),
-                    cost_str(card),
+                    _cost_block(card),
                 )
             return t
 
